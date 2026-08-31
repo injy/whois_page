@@ -1,0 +1,5 @@
+{
+  "name": "whois-cloud-functions",
+  "private": true,
+  "type": "module"
+}
