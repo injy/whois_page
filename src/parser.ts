@@ -83,28 +83,10 @@ export function parseRdap(
   setDates(json, empty);
 
   empty.status = getStatus(json);
-  formatStatus(empty.status);
-
   empty.nameServers = getNameServers(json);
   empty.dnssecSigned = getDNSSECSigned(json);
 
-  empty.createdAgo = dateDiffText(empty.creationDateISO8601, "now");
-  empty.createdAgoSeconds = dateDiffSeconds(empty.creationDateISO8601, "now");
-  empty.expiresIn = dateDiffText("now", empty.expirationDateISO8601);
-  empty.expiresInSeconds = dateDiffSeconds("now", empty.expirationDateISO8601);
-  empty.updatedAgo = dateDiffText(empty.updatedDateISO8601, "now");
-  empty.updatedAgoSeconds = dateDiffSeconds(empty.updatedDateISO8601, "now");
-
-  empty.gracePeriod = hasAnyStatusText(empty.status, GRACE_PERIOD_TEXTS);
-  empty.redemptionPeriod = hasAnyStatusText(empty.status, REDEMPTION_PERIOD_TEXTS);
-  empty.pendingDelete = hasAnyStatusText(empty.status, PENDING_DELETE_TEXTS);
-  empty.hold = hasAnyStatusText(empty.status, HOLD_TEXTS);
-  empty.inactive = hasAnyStatusText(empty.status, INACTIVE_TEXTS);
-
-  empty.unknown = isUnknown(empty);
-  if (empty.unknown) empty.registered = false;
-
-  return empty;
+  return finalizeWhoisResult(empty);
 }
 
 /**
@@ -124,7 +106,29 @@ function unparsable(result: WhoisResult, code: number): WhoisResult {
   return result;
 }
 
-function createEmpty(): WhoisResult {
+export function finalizeWhoisResult(result: WhoisResult): WhoisResult {
+  formatStatus(result.status);
+
+  result.createdAgo = dateDiffText(result.creationDateISO8601, "now");
+  result.createdAgoSeconds = dateDiffSeconds(result.creationDateISO8601, "now");
+  result.expiresIn = dateDiffText("now", result.expirationDateISO8601);
+  result.expiresInSeconds = dateDiffSeconds("now", result.expirationDateISO8601);
+  result.updatedAgo = dateDiffText(result.updatedDateISO8601, "now");
+  result.updatedAgoSeconds = dateDiffSeconds(result.updatedDateISO8601, "now");
+
+  result.gracePeriod = hasAnyStatusText(result.status, GRACE_PERIOD_TEXTS);
+  result.redemptionPeriod = hasAnyStatusText(result.status, REDEMPTION_PERIOD_TEXTS);
+  result.pendingDelete = hasAnyStatusText(result.status, PENDING_DELETE_TEXTS);
+  result.hold = hasAnyStatusText(result.status, HOLD_TEXTS);
+  result.inactive = hasAnyStatusText(result.status, INACTIVE_TEXTS);
+
+  result.unknown = isUnknown(result);
+  if (result.unknown) result.registered = false;
+
+  return result;
+}
+
+export function createEmpty(): WhoisResult {
   return {
     unknown: false,
     reserved: false,
@@ -300,7 +304,7 @@ function setDates(json: Record<string, any>, result: WhoisResult): void {
   }
 }
 
-function toISO8601(dateStr: string): string | null {
+export function toISO8601(dateStr: string): string | null {
   if (!dateStr || dateStr === "Z") return null;
   try {
     const d = new Date(dateStr);

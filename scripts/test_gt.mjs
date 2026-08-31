@@ -17,9 +17,25 @@ const { parseGtHtml } = await import(pathToFileURL(process.cwd() + "/" + OUT).hr
 
 for (const f of ["y_gt.html", "g_gt.html", "www_gt.html", "w_gt.html"]) {
   const html = readFileSync(f, "utf8");
-  const out = parseGtHtml(html);
+  const parsed = parseGtHtml(html);
   console.log("================ " + f + " ================");
-  console.log(out);
+  if (!parsed) {
+    console.log("(null)");
+    continue;
+  }
+  const d = parsed.data;
+  if (d) {
+    console.log("domain       :", d.domain);
+    console.log("registered   :", d.registered);
+    console.log("status       :", JSON.stringify(d.status));
+    console.log("expiration   :", d.expirationDate, "->", d.expirationDateISO8601);
+    console.log("registrar    :", d.registrar);
+    console.log("nameServers  :", JSON.stringify(d.nameServers));
+  } else {
+    console.log("(no structured data — raw only)");
+  }
+  console.log("--- rawText ---");
+  console.log(parsed.rawText);
   console.log();
 }
 

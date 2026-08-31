@@ -1,4 +1,10 @@
 import { parseHTML } from "linkedom";
+import {
+  type WhoisResult,
+  createEmpty,
+  toISO8601,
+  finalizeWhoisResult,
+} from "../parser";
 
 const NBSP = " ";
 
@@ -14,6 +20,33 @@ function clean(s: string): string {
     .trim();
 }
 
+const MONTHS: Record<string, string> = {
+  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
+  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
+};
+
+// Parse the registry's "YYYY-Mon-DD HH:MM:SS" (or date-only) stamp into ISO-8601.
+function gtDateToISO(s: string): string | null {
+  const m = s.trim().match(/^(\d{4})-([A-Za-z]{3})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
+  if (!m) return toISO8601(s);
+  const [, y, mon, d, hh, mm, ss] = m;
+  const mo = MONTHS[mon.charAt(0).toUpperCase() + mon.slice(1).toLowerCase()] ?? "01";
+  const date = `${y}-${mo}-${d}`;
+  if (hh && mm) {
+    const time = ss ? `${hh.padStart(2, "0")}:${mm}:${ss}` : `${hh.padStart(2, "0")}:${mm}:00`;
+    const dt = new Date(`${date}T${time}Z`);
+    if (isNaN(dt.getTime())) return toISO8601(s);
+    return `${date}T${time}Z`;
+  }
+  return date;
+}
+
+export interface GtParseResult {
+  rawText: string;
+  /** Structured fields when the domain is registered; absent for not-found / error. */
+  data?: WhoisResult;
+}
+
 /**
  * Parse the Guatemala (.gt) registry whois HTML page.
  *
@@ -26,18 +59,19 @@ function clean(s: string): string {
  *  - Box 1: administrative / technical contacts (form-stack > h4, form-field).
  *
  * An unregistered / error domain instead shows a single `div.caja.caja-message`
- * box, whose text is returned verbatim.
+ * box, whose text is returned verbatim (the caller decides registered vs unknown).
  *
- * Returns the formatted whois text, or null when nothing meaningful is found.
+ * Besides the human-readable `rawText`, a structured `WhoisResult` is produced so
+ * the unified frontend renderer shows the same rich cards as RDAP / WHOIS.
  */
-export function parseGtHtml(html: string): string | null {
+export function parseGtHtml(html: string): GtParseResult | null {
   const doc = parseHTML(html).document;
 
   // Not-found / error message box: //div[@class="caja caja-message"]
   const message = doc.querySelector("div.caja.caja-message");
   if (message) {
     const msg = clean(message.textContent ?? "").replace(/ {2,}/g, " ");
-    return msg || null;
+    return msg ? { rawText: msg } : null;
   }
 
   // whois boxes: //div[@class="caja caja-whois"]
@@ -45,6 +79,12 @@ export function parseGtHtml(html: string): string | null {
   if (boxes.length !== 2) return null;
 
   const lines: string[] = [];
+  const data = createEmpty();
+  data.registered = true;
+
+  let orgName = "";
+  let captureOrg = false;
+  const nameServers: string[] = [];
 
   // Box 0 — domain + status, expiration, entitled organisation, servers
   // (linkedom reports uppercase nodeName for elements, so match on nodeType===1)
@@ -58,33 +98,47 @@ export function parseGtHtml(html: string): string | null {
         const kids = Array.from(h3.childNodes) as any[];
         const nameNode = kids[0];
         if (nameNode) {
-          lines.push("Domain Name: " + clean(nameNode.textContent ?? "").replace(/[ .\n]+$/, ""));
+          const dn = clean(nameNode.textContent ?? "").replace(/[ .\n]+$/, "");
+          data.domain = dn.toLowerCase();
+          lines.push("Domain Name: " + dn);
         }
         const statusNode = kids[1];
         if (statusNode) {
-          lines.push("Domain Status: " + clean(statusNode.textContent ?? ""));
+          const st = clean(statusNode.textContent ?? "");
+          data.status = [{ text: st, url: "" }];
+          lines.push("Domain Status: " + st);
         }
       }
     } else if (cls === "alert alert-info") {
+      const title = clean(child.textContent ?? "");
       lines.push("");
-      lines.push(clean(child.textContent ?? "") + ":");
+      lines.push(title + ":");
+      if (title === "Entitled Organization") captureOrg = true;
     } else if (cls === "form-stack") {
       const strong = child.querySelector("strong");
       if (strong) {
-        lines.push(clean(strong.textContent ?? ""));
+        const exp = clean(strong.textContent ?? "");
+        lines.push(exp);
+        const expVal = exp.replace(/^Expiration:?/i, "").trim();
+        data.expirationDate = expVal;
+        data.expirationDateISO8601 = gtDateToISO(expVal);
       } else {
         for (const field of Array.from(child.querySelectorAll("div.form-field")) as any[]) {
           lines.push("  " + clean(field.textContent ?? ""));
+          if (captureOrg && !orgName) orgName = clean(field.textContent ?? "");
         }
+        captureOrg = false;
       }
     } else if (cls === "form-field") {
       for (const li of Array.from(child.querySelectorAll("li")) as any[]) {
-        lines.push("  " + clean(li.textContent ?? ""));
+        const v = clean(li.textContent ?? "");
+        lines.push("  " + v);
+        if (v) nameServers.push(v);
       }
     }
   }
 
-  // Box 1 — administrative / technical contacts
+  // Box 1 — administrative / technical contacts (raw text only)
   for (const child of Array.from(boxes[1].childNodes) as any[]) {
     if (child.nodeType !== 1) continue;
     const h4 = child.querySelector("h4");
@@ -97,6 +151,9 @@ export function parseGtHtml(html: string): string | null {
     }
   }
 
-  const whois = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
-  return whois || null;
+  if (orgName) data.registrar = orgName;
+  if (nameServers.length) data.nameServers = nameServers;
+
+  const rawText = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { rawText, data: finalizeWhoisResult(data) };
 }

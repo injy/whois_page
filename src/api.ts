@@ -157,7 +157,9 @@ export async function lookup(
     try {
       const scraperResult = await fetchViaWebScraper(registrableDomain, asciiSuffix);
       if (scraperResult) {
-        const result = parseWhoisText(scraperResult.rawText);
+        // Prefer structured data the scraper extracted; fall back to parsing
+        // its raw text the same way a plain WHOIS response would be parsed.
+        const result = scraperResult.data ?? parseWhoisText(scraperResult.rawText);
         if (hasGoodResult(result)) {
           return {
             code: 0,

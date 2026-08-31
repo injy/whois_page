@@ -330,8 +330,8 @@ export const gtScraper = async (domain: string): Promise<WebScraperResult | null
     }
     if (!html) return null;
 
-    const rawText = parseGtHtml(html);
-    return rawText ? { rawText } : null;
+    const parsed = parseGtHtml(html);
+    return parsed ? { rawText: parsed.rawText, data: parsed.data } : null;
   } catch {
     return null;
   }

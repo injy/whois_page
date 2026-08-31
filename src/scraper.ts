@@ -1,8 +1,16 @@
 import WEB_TLDS from "./data/tld-web.json";
 import * as scrapers from "./scrapers";
+import type { WhoisResult } from "./parser";
 
 export interface WebScraperResult {
   rawText: string;
+  /**
+   * Optional structured result. When a scraper can extract the needed fields
+   * (domain, status, dates, name servers, registrar, ...) it should populate
+   * this so the unified frontend renderer shows the same rich cards as RDAP /
+   * WHOIS. When absent, the caller falls back to parsing `rawText`.
+   */
+  data?: WhoisResult;
 }
 
 type ScraperFn = (domain: string, labels: string[]) => Promise<WebScraperResult | null>;
