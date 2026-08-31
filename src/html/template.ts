@@ -269,6 +269,14 @@ function getJS(): string {
     doLookup(domain);
   });
 
+  // Deep link: /?domain=example.com renders the result on load
+  var initialDomain=new URLSearchParams(location.search).get("domain");
+  if(initialDomain){
+    domainInput.value=initialDomain;
+    clearBtn.classList.add("visible");
+    doLookup(initialDomain);
+  }
+
   function doLookup(domain){
     searchBtn.disabled=true;
     searchBtn.dataset.loading="true";
@@ -279,7 +287,13 @@ function getJS(): string {
     if(poolUrl)params+="&proxy_pool="+encodeURIComponent(poolUrl);
 
     fetch("/api/lookup?"+params)
-      .then(function(r){return r.json()})
+      .then(function(r){
+        var ct=r.headers.get("content-type")||"";
+        if(ct.indexOf("application/json")<0){
+          throw new Error("The API did not return JSON (HTTP "+r.status+"). Check that the /api/lookup function is deployed.");
+        }
+        return r.json();
+      })
       .then(function(resp){
         searchBtn.disabled=false;
         searchBtn.dataset.loading="false";
