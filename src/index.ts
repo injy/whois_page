@@ -1,40 +1,19 @@
-import { lookup, type LookupEnv } from "./api";
+import { lookup, type LookupOptions } from "./api";
 import { getHtml } from "./html/template";
 
-export default {
-  async fetch(request: Request, env: Record<string, string>): Promise<Response> {
-    const url = new URL(request.url);
+// ─── Shared handler (platform-agnostic) ───────────────────────────────
 
-    if (url.pathname === "/api/lookup") {
-      return handleApi(url, env);
-    }
-
-    if (url.pathname === "/" || url.pathname === "") {
-      return new Response(getHtml(), {
-        headers: {
-          "content-type": "text/html;charset=UTF-8",
-          "cache-control": "no-cache",
-        },
-      });
-    }
-
-    return new Response("Not Found", { status: 404 });
-  },
-};
-
-async function handleApi(url: URL, env: Record<string, string>): Promise<Response> {
+async function handleApiRequest(url: URL): Promise<Response> {
   const domain = url.searchParams.get("domain") || "";
+  const proxyPoolUrl = url.searchParams.get("proxy_pool") || undefined;
 
-  const lookupEnv: LookupEnv = {};
-  // WHOIS_PROXY_POOL_URL takes priority; falls back to WHOIS_PROXY_URL for backward compatibility
-  if (env.WHOIS_PROXY_POOL_URL) {
-    lookupEnv.WHOIS_PROXY_URL = env.WHOIS_PROXY_POOL_URL;
-  } else if (env.WHOIS_PROXY_URL) {
-    lookupEnv.WHOIS_PROXY_URL = env.WHOIS_PROXY_URL;
+  const options: LookupOptions = {};
+  if (proxyPoolUrl) {
+    options.proxyPoolUrl = proxyPoolUrl;
   }
 
   try {
-    const result = await lookup(domain, lookupEnv);
+    const result = await lookup(domain, options);
     return new Response(JSON.stringify(result), {
       headers: {
         "content-type": "application/json;charset=UTF-8",
@@ -56,4 +35,89 @@ async function handleApi(url: URL, env: Record<string, string>): Promise<Respons
       },
     });
   }
+}
+
+function handleRootRequest(): Response {
+  return new Response(getHtml(), {
+    headers: {
+      "content-type": "text/html;charset=UTF-8",
+      "cache-control": "no-cache",
+    },
+  });
+}
+
+function handleNotFound(): Response {
+  return new Response("Not Found", { status: 404 });
+}
+
+// ─── Cloudflare Workers adapter ───────────────────────────────────────
+
+export default {
+  async fetch(request: Request): Promise<Response> {
+    const url = new URL(request.url);
+
+    if (url.pathname === "/api/lookup") {
+      return handleApiRequest(url);
+    }
+
+    if (url.pathname === "/" || url.pathname === "") {
+      return handleRootRequest();
+    }
+
+    return handleNotFound();
+  },
+};
+
+// ── Tencent Cloud SCF adapter ────────────────────────────────────────
+// Deploy as Web Function (HTTP trigger)
+// Entry: src/adapters/tencent.handler
+
+export async function tencentHandler(event: any, _context: any): Promise<any> {
+  const url = new URL(
+    event.path + (event.queryString ? "?" + new URLSearchParams(event.queryString).toString() : ""),
+    "http://localhost",
+  );
+
+  if (url.pathname === "/api/lookup") {
+    const resp = await handleApiRequest(url);
+    return {
+      statusCode: resp.status,
+      headers: Object.fromEntries(resp.headers.entries()),
+      body: await resp.text(),
+    };
+  }
+
+  if (url.pathname === "/" || url.pathname === "") {
+    const resp = handleRootRequest();
+    return {
+      statusCode: resp.status,
+      headers: Object.fromEntries(resp.headers.entries()),
+      body: await resp.text(),
+    };
+  }
+
+  const resp = handleNotFound();
+  return {
+    statusCode: resp.status,
+    headers: Object.fromEntries(resp.headers.entries()),
+    body: await resp.text(),
+  };
+}
+
+// ─── Alibaba Cloud FC adapter ─────────────────────────────────────────
+// Deploy as HTTP Function
+// Entry: src/adapters/aliyun.handler
+
+export async function aliyunHandler(request: any, context: any): Promise<any> {
+  const url = new URL(request.url);
+
+  if (url.pathname === "/api/lookup") {
+    return handleApiRequest(url);
+  }
+
+  if (url.pathname === "/" || url.pathname === "") {
+    return handleRootRequest();
+  }
+
+  return handleNotFound();
 }

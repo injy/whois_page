@@ -5,8 +5,8 @@ import { fetchWhoisViaProxy } from "./whois";
 import { parseWhoisText } from "./whois-parser";
 import { fetchViaWebScraper, hasScraper } from "./scraper";
 
-export interface LookupEnv {
-  WHOIS_PROXY_URL?: string;
+export interface LookupOptions {
+  proxyPoolUrl?: string;
 }
 
 interface ApiResponse {
@@ -33,7 +33,10 @@ export function cleanDomain(input: string): string {
   return domain;
 }
 
-export async function lookup(rawDomain: string, env?: LookupEnv): Promise<ApiResponse> {
+export async function lookup(
+  rawDomain: string,
+  options?: LookupOptions,
+): Promise<ApiResponse> {
   const domain = cleanDomain(rawDomain);
   if (!domain) {
     return { code: 1, msg: "The 'domain' parameter is required.", data: null };
@@ -64,11 +67,11 @@ export async function lookup(rawDomain: string, env?: LookupEnv): Promise<ApiRes
     }
   }
 
-  // Source 2: WHOIS via proxy
-  const proxyUrl = env?.WHOIS_PROXY_URL;
-  if (proxyUrl) {
+  // Source 2: WHOIS via proxy pool
+  const proxyPoolUrl = options?.proxyPoolUrl;
+  if (proxyPoolUrl) {
     try {
-      const whoisResponse = await fetchWhoisViaProxy(proxyUrl, registrableDomain, suffix);
+      const whoisResponse = await fetchWhoisViaProxy(proxyPoolUrl, registrableDomain, suffix);
       if (whoisResponse) {
         rawWhois = whoisResponse.rawText;
         whoisResult = parseWhoisText(whoisResponse.rawText);
@@ -95,7 +98,7 @@ export async function lookup(rawDomain: string, env?: LookupEnv): Promise<ApiRes
   const merged = mergeResults(rdapResult, whoisResult);
 
   if (!merged && !rawRdap && !rawWhois && !scraperRaw) {
-    if (!rdapServer && !proxyUrl && !hasScraper(suffix)) {
+    if (!rdapServer && !proxyPoolUrl && !hasScraper(suffix)) {
       return {
         code: 1,
         msg: `No lookup source available for '${registrableDomain}'.`,
