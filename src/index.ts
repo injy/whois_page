@@ -1,42 +1,8 @@
-import { lookup, type LookupOptions } from "./api";
+import { handleApiRequest, handleOptions } from "./handler";
 import { getHtml } from "./html/template";
 import { parseDomain } from "./psl";
 
 // ─── Shared handler (platform-agnostic) ───────────────────────────────
-
-async function handleApiRequest(url: URL): Promise<Response> {
-  const domain = url.searchParams.get("domain") || "";
-  const proxyPoolUrl = url.searchParams.get("proxy_pool") || undefined;
-
-  const options: LookupOptions = {};
-  if (proxyPoolUrl) {
-    options.proxyPoolUrl = proxyPoolUrl;
-  }
-
-  try {
-    const result = await lookup(domain, options);
-    return new Response(JSON.stringify(result), {
-      headers: {
-        "content-type": "application/json;charset=UTF-8",
-        "access-control-allow-origin": "*",
-        "cache-control": "public, max-age=300",
-      },
-    });
-  } catch (e: any) {
-    const errorResponse = {
-      code: 1,
-      msg: e?.message || "Internal error",
-      data: null,
-    };
-    return new Response(JSON.stringify(errorResponse), {
-      status: 500,
-      headers: {
-        "content-type": "application/json;charset=UTF-8",
-        "access-control-allow-origin": "*",
-      },
-    });
-  }
-}
 
 function handleRootRequest(): Response {
   return new Response(getHtml(), {
@@ -49,18 +15,6 @@ function handleRootRequest(): Response {
 
 function handleNotFound(): Response {
   return new Response("Not Found", { status: 404 });
-}
-
-function handleOptions(): Response {
-  return new Response(null, {
-    status: 204,
-    headers: {
-      "access-control-allow-origin": "*",
-      "access-control-allow-methods": "GET, OPTIONS",
-      "access-control-allow-headers": "content-type",
-      "access-control-max-age": "86400",
-    },
-  });
 }
 
 // ─── Route resolution helper ──────────────────────────────────────────
@@ -112,10 +66,13 @@ function resolveRoute(
 
   // /something → API with path as domain (e.g. /google.com)
   if (path) {
-    if (!isDomainLike(path)) {
-      return { mode: "notfound" };
+    if (isDomainLike(path)) {
+      return { mode: "api", domain: path };
     }
-    return { mode: "api", domain: path };
+    // Static assets are genuinely missing, but any other unknown path (a typo,
+    // or a prefix injected by the hosting platform such as /whois/) should
+    // still serve the app instead of a 404.
+    return hasAssetExtension(path) ? { mode: "notfound" } : { mode: "page" };
   }
 
   // Fallback: HTML page
@@ -126,6 +83,14 @@ function resolveRoute(
 function isDomainLike(value: string): boolean {
   if (value.includes("/") || value.includes("%")) return false;
   return parseDomain(value) !== null;
+}
+
+const ASSET_EXTENSION_RE =
+  /\.(ico|png|jpe?g|gif|svg|webp|avif|css|js|mjs|map|json|txt|xml|woff2?|ttf|otf|mp4|pdf|webmanifest)$/i;
+
+function hasAssetExtension(value: string): boolean {
+  const lastSegment = value.split("/").pop() || value;
+  return ASSET_EXTENSION_RE.test(lastSegment);
 }
 
 function respond(route: { mode: "api" | "page" | "notfound"; domain?: string }, url: URL): Promise<Response> | Response {

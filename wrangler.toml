@@ -1,3 +1,15 @@
 name = "whois"
 compatibility_date = "2024-05-12"
 main = "src/index.ts"
+
+# Keep the worker reachable on https://whois.<your-subdomain>.workers.dev
+workers_dev = true
+
+# To serve the worker from your own domain, create a "Custom Domain" for it
+# (Workers & Pages → whois → Settings → Domains & Routes) or uncomment and
+# adjust the block below. Without one of the two, the custom hostname is not
+# linked to this worker and every request to it ends in a 404.
+#
+# routes = [
+#   { pattern = "whois.example.com", custom_domain = true }
+# ]
