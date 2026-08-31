@@ -1,3 +1,4 @@
+import { parseHTML } from "linkedom";
 import { WebScraperResult } from "../scraper";
 
 const FETCH_TIMEOUT_MS = 12000;
@@ -15,55 +16,79 @@ async function fetchTimeout(url: string, init?: RequestInit): Promise<Response> 
   }
 }
 
-const HTML_ENTITIES: Record<string, string> = {
-  amp: "&",
-  lt: "<",
-  gt: ">",
-  quot: '"',
-  apos: "'",
-  nbsp: " ",
-};
+const NBSP = " ";
+const SKIP_TAGS = new Set([
+  "script", "style", "noscript", "svg", "head", "nav", "footer", "header",
+]);
+const BLOCK_TAGS = new Set([
+  "p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "table", "pre", "section",
+]);
+
+/**
+ * Parse a registry HTML page into a queryable DOM document (linkedom).
+ * linkedom is pure JS (no Node built-ins) so it runs on edge runtimes such as
+ * Cloudflare Workers and EdgeOne Pages.
+ */
+export function parseHtml(html: string) {
+  return parseHTML(html).document;
+}
+
+function normalizeWs(s: string): string {
+  return s.replace(new RegExp(NBSP, "g"), " ").replace(/\s+/g, " ").trim();
+}
+
+function nodeToText(node: any, out: string[]): void {
+  if (node.nodeType === 3) {
+    out.push(String(node.textContent ?? "").replace(new RegExp(NBSP, "g"), " "));
+    return;
+  }
+  if (node.nodeType !== 1) return; // skip comments / doctype / etc.
+  const tag = String(node.tagName || "").toLowerCase();
+  if (SKIP_TAGS.has(tag)) return;
+
+  if (tag === "table") {
+    for (const tr of Array.from(node.querySelectorAll("tr")) as any[]) {
+      const cells = (Array.from(tr.querySelectorAll("td, th")) as any[])
+        .map((c) => normalizeWs(String(c.textContent ?? "")))
+        .filter(Boolean);
+      if (cells.length >= 2) {
+        out.push(`${cells[0]}: ${cells.slice(1).join(", ")}`);
+      } else if (cells.length === 1) {
+        out.push(cells[0]);
+      }
+    }
+    return;
+  }
+
+  if (tag === "br" || tag === "hr") {
+    out.push("\n");
+    return;
+  }
+
+  for (const child of Array.from(node.childNodes)) {
+    nodeToText(child, out);
+  }
+
+  if (BLOCK_TAGS.has(tag)) out.push("\n");
+}
 
 /**
  * Turns a registry HTML page into "Key: Value" text so that parseWhoisText()
  * can read it. Handing raw HTML to the text parser produced garbage fields
  * and false "unregistered" matches on words such as "not found".
+ *
+ * Implemented with a real DOM (linkedom) instead of tag-stripping regex, so
+ * HTML entity decoding and block structure are handled correctly.
  */
 export function htmlToWhoisText(html: string): string {
-  let text = html;
-
-  text = text.replace(
-    /<(script|style|noscript|svg|head|nav|footer|header)[\s\S]*?<\/\1>/gi,
-    " ",
-  );
-
-  // Table rows become "Label: Value" lines.
-  text = text.replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, (_match, row: string) => {
-    const cells = row.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) || [];
-    const values = cells
-      .map((cell) => cell.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
-      .filter(Boolean);
-    if (values.length >= 2) {
-      return `${values[0]}: ${values.slice(1).join(", ")}\n`;
-    }
-    return values.length ? `${values.join("\n")}\n` : "\n";
-  });
-
-  text = text.replace(/<\/(p|div|li|h[1-6]|table|pre|section)>/gi, "\n");
-  text = text.replace(/<(br|hr)\s*\/?>/gi, "\n");
-  text = text.replace(/<[^>]+>/g, " ");
-
-  text = text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, code: string) => {
-    const named = HTML_ENTITIES[code.toLowerCase()];
-    if (named !== undefined) return named;
-    if (/^#x/i.test(code)) return String.fromCodePoint(parseInt(code.slice(2), 16));
-    if (/^#/.test(code)) return String.fromCodePoint(parseInt(code.slice(1), 10));
-    return match;
-  });
-
-  return text
+  const doc = parseHtml(html);
+  const root = doc.body || doc.documentElement;
+  const parts: string[] = [];
+  if (root) nodeToText(root, parts);
+  return parts
+    .join("")
     .split("\n")
-    .map((line) => line.replace(/[ \t ]+/g, " ").trim())
+    .map((line) => line.replace(/[ \t]+/g, " ").trim())
     .filter((line) => line.length > 0)
     .join("\n")
     .trim();
@@ -279,7 +304,10 @@ export const hkScraper = async (domain: string): Promise<WebScraperResult | null
   }
 };
 
-// GT - Guatemala registry (from original project WHOISWeb.php getGT())
+// GT - Guatemala registry (ported from original project WHOISWeb.php getGT())
+// The registry returns an HTML page built from "caja caja-whois" boxes. We walk
+// the document in order: h3 -> domain + status, <strong>Expiration</strong>,
+// h4 -> section headers, and form-field / li nodes -> their text values.
 export const gtScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.gt/sitio/whois.php?dn=${encodeURIComponent(domain)}&lang=en`;
@@ -291,49 +319,58 @@ export const gtScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    
-    let whoisText = "";
-    
-    // Extract domain name and status (from h3 tag)
-    const domainMatch = html.match(/<h3>\s*([^<]+?)\.\s*<small>\s*<i[^>]*><\/i>\s*([^<]+?)\s*<\/small>/i);
-    if (domainMatch) {
-      whoisText += `Domain Name: ${domainMatch[1].trim()}\n`;
-      whoisText += `Domain Status: ${domainMatch[2].trim()}\n`;
+
+    const doc = parseHtml(html);
+    const text = (el: any): string => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
+
+    let whois = "";
+
+    // Not-found / error message box
+    const messageEl = doc.querySelector("div.caja-message");
+    if (messageEl) {
+      const msg = text(messageEl);
+      return msg ? { rawText: msg } : null;
     }
-    
-    // Extract expiration date
-    const expiryMatch = html.match(/Expiration:\s*([^<]+)/i);
-    if (expiryMatch) {
-      whoisText += `Registry Expiry Date: ${expiryMatch[1].trim()}\n`;
+
+    // Domain name + status (h3 inside the first alert-success box; the status
+    // sits in a <small> child, the domain name is the rest of the heading)
+    const h3 = doc.querySelector("div.alert-success h3");
+    if (h3) {
+      const small = h3.querySelector("small");
+      const status = small ? text(small) : "";
+      const domainText = text(h3).replace(status, "").replace(/\s*\.\s*$/, "").trim();
+      whois += `Domain Name: ${domainText}.\n`;
+      if (status) whois += `Domain Status: ${status}\n`;
     }
-    
-    // Extract organization info (from label.dn_info elements)
-    const orgLabelRegex = /<label[^>]*class="dn_info"[^>]*>\s*<i[^>]*><\/i>\s*([^<]+)<\/label>\s*<div[^>]*>([^<]*)<\/div>/gi;
-    let orgMatch;
-    while ((orgMatch = orgLabelRegex.exec(html)) !== null) {
-      const label = orgMatch[1].trim();
-      const value = orgMatch[2].trim();
-      if (value) {
-        whoisText += `${label}: ${value}\n`;
+
+    // Expiration date
+    const strong = Array.from(doc.querySelectorAll("strong")).find((s) =>
+      /Expiration/i.test((s as any).textContent ?? ""),
+    );
+    if (strong) {
+      whois += `Registry Expiry Date: ${text(strong).replace(/Expiration:/i, "")}\n`;
+    }
+
+    // Section headers (alert alert-info > h4) and their values (form-field / li)
+    const domainLabel = h3 ? text(h3).split(".")[0] : "";
+    const seen = new Set<string>();
+    for (const box of Array.from(doc.querySelectorAll("div.caja-whois")) as any[]) {
+      for (const h4 of Array.from(box.querySelectorAll("div.alert-info h4")) as any[]) {
+        whois += `\n${text(h4)}:\n`;
+      }
+      for (const field of Array.from(box.querySelectorAll("div.form-field, li")) as any[]) {
+        const value = text(field);
+        if (!value) continue;
+        if (/Expiration/i.test(value)) continue;
+        if (domainLabel && value.startsWith(`${domainLabel}.`)) continue;
+        const line = `  ${value}`;
+        if (seen.has(line)) continue;
+        seen.add(line);
+        whois += `${line}\n`;
       }
     }
-    
-    // Extract nameservers
-    const nsRegex = /Name Server:\s*([^<\n]+)/gi;
-    let nsMatch;
-    while ((nsMatch = nsRegex.exec(html)) !== null) {
-      whoisText += `Name Server: ${nsMatch[1].trim()}\n`;
-    }
-    
-    if (!whoisText.trim()) {
-      // Check for error message
-      const errorMsg = html.match(/<div[^>]*class="[^"]*alert[^"]*alert-danger[^"]*"[^>]*>([^<]+)<\/div>/i);
-      if (errorMsg) {
-        whoisText = errorMsg[1].trim();
-      }
-    }
-    
-    return whoisText.trim() ? { rawText: whoisText } : null;
+
+    return whois.trim() ? { rawText: whois.trim() } : null;
   } catch {
     return null;
   }
