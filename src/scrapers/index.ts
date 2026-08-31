@@ -1,5 +1,6 @@
 import { parseHTML } from "linkedom";
 import { WebScraperResult } from "../scraper";
+import { parseGtHtml } from "./gt";
 
 const FETCH_TIMEOUT_MS = 12000;
 
@@ -304,10 +305,8 @@ export const hkScraper = async (domain: string): Promise<WebScraperResult | null
   }
 };
 
-// GT - Guatemala registry (ported from original project WHOISWeb.php getGT())
-// The registry returns an HTML page built from "caja caja-whois" boxes. We walk
-// the document in order: h3 -> domain + status, <strong>Expiration</strong>,
-// h4 -> section headers, and form-field / li nodes -> their text values.
+// GT - Guatemala registry. The HTML layout is parsed 1:1 from the original
+// PHP project WHOISWeb.php::getGT() inside src/scrapers/gt.ts.
 export const gtScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.gt/sitio/whois.php?dn=${encodeURIComponent(domain)}&lang=en`;
@@ -319,58 +318,8 @@ export const gtScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-
-    const doc = parseHtml(html);
-    const text = (el: any): string => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
-
-    let whois = "";
-
-    // Not-found / error message box
-    const messageEl = doc.querySelector("div.caja-message");
-    if (messageEl) {
-      const msg = text(messageEl);
-      return msg ? { rawText: msg } : null;
-    }
-
-    // Domain name + status (h3 inside the first alert-success box; the status
-    // sits in a <small> child, the domain name is the rest of the heading)
-    const h3 = doc.querySelector("div.alert-success h3");
-    if (h3) {
-      const small = h3.querySelector("small");
-      const status = small ? text(small) : "";
-      const domainText = text(h3).replace(status, "").replace(/\s*\.\s*$/, "").trim();
-      whois += `Domain Name: ${domainText}.\n`;
-      if (status) whois += `Domain Status: ${status}\n`;
-    }
-
-    // Expiration date
-    const strong = Array.from(doc.querySelectorAll("strong")).find((s) =>
-      /Expiration/i.test((s as any).textContent ?? ""),
-    );
-    if (strong) {
-      whois += `Registry Expiry Date: ${text(strong).replace(/Expiration:/i, "")}\n`;
-    }
-
-    // Section headers (alert alert-info > h4) and their values (form-field / li)
-    const domainLabel = h3 ? text(h3).split(".")[0] : "";
-    const seen = new Set<string>();
-    for (const box of Array.from(doc.querySelectorAll("div.caja-whois")) as any[]) {
-      for (const h4 of Array.from(box.querySelectorAll("div.alert-info h4")) as any[]) {
-        whois += `\n${text(h4)}:\n`;
-      }
-      for (const field of Array.from(box.querySelectorAll("div.form-field, li")) as any[]) {
-        const value = text(field);
-        if (!value) continue;
-        if (/Expiration/i.test(value)) continue;
-        if (domainLabel && value.startsWith(`${domainLabel}.`)) continue;
-        const line = `  ${value}`;
-        if (seen.has(line)) continue;
-        seen.add(line);
-        whois += `${line}\n`;
-      }
-    }
-
-    return whois.trim() ? { rawText: whois.trim() } : null;
+    const rawText = parseGtHtml(html);
+    return rawText ? { rawText } : null;
   } catch {
     return null;
   }
