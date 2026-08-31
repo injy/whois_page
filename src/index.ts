@@ -60,7 +60,11 @@ export default {
       return handleApiRequest(url);
     }
 
+    // Root path: serve HTML, but if ?domain= is present, also serve JSON API
     if (url.pathname === "/" || url.pathname === "") {
+      if (url.searchParams.has("domain")) {
+        return handleApiRequest(url);
+      }
       return handleRootRequest();
     }
 
@@ -88,6 +92,15 @@ export async function tencentHandler(event: any, _context: any): Promise<any> {
   }
 
   if (url.pathname === "/" || url.pathname === "") {
+    const params = new URLSearchParams(event.queryString);
+    if (params.has("domain")) {
+      const resp = await handleApiRequest(url);
+      return {
+        statusCode: resp.status,
+        headers: Object.fromEntries(resp.headers.entries()),
+        body: await resp.text(),
+      };
+    }
     const resp = handleRootRequest();
     return {
       statusCode: resp.status,
@@ -116,6 +129,9 @@ export async function aliyunHandler(request: any, context: any): Promise<any> {
   }
 
   if (url.pathname === "/" || url.pathname === "") {
+    if (url.searchParams.has("domain")) {
+      return handleApiRequest(url);
+    }
     return handleRootRequest();
   }
 
