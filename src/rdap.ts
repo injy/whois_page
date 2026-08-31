@@ -1,4 +1,5 @@
 import { RDAP_SERVERS } from "./data/rdap-servers";
+import { toAscii } from "./idna";
 
 export interface RdapResponse {
   code: number;
@@ -38,14 +39,5 @@ export async function fetchRdap(
     return { code: response.status, data: text };
   } finally {
     clearTimeout(timeout);
-  }
-}
-
-function toAscii(input: string): string {
-  try {
-    const url = new URL(`http://${input}`);
-    return url.hostname;
-  } catch {
-    return input;
   }
 }

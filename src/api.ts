@@ -1,12 +1,11 @@
 import { parseDomain } from "./psl";
+import { toAscii } from "./idna";
 import { findRdapServer, fetchRdap } from "./rdap";
 import { parseRdap, type WhoisResult } from "./parser";
-import { fetchWhoisViaProxy } from "./whois";
+import { fetchWhoisViaProxy, hasWhoisServer } from "./whois";
 import { parseWhoisText } from "./whois-parser";
-import { fetchViaWebScraper, hasScraper } from "./scraper";
+import { fetchViaWebScraper } from "./scraper";
 import { CONFIG } from "./config";
-import RDAP_MAP from "./data/tld-rdap.json";
-import WHOIS_MAP from "./data/tld-whois.json";
 import WEB_TLDS from "./data/tld-web.json";
 
 export interface LookupOptions {
@@ -38,6 +37,46 @@ export function cleanDomain(input: string): string {
   return domain;
 }
 
+/**
+ * Guards the user supplied `proxy_pool` parameter against SSRF: only http(s)
+ * URLs are accepted and hosts pointing at private / loopback / link-local
+ * ranges are rejected.
+ */
+function isAllowedProxyPoolUrl(raw: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return false;
+  }
+
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+
+  const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (!host) return false;
+  if (
+    host === "localhost" ||
+    host.endsWith(".localhost") ||
+    host.endsWith(".internal") ||
+    host === "::1" ||
+    host === "0.0.0.0"
+  ) {
+    return false;
+  }
+  if (/^127\./.test(host)) return false;
+  if (/^10\./.test(host)) return false;
+  if (/^192\.168\./.test(host)) return false;
+  if (/^169\.254\./.test(host)) return false;
+
+  const private172 = host.match(/^172\.(\d+)\./);
+  if (private172) {
+    const second = Number(private172[1]);
+    if (second >= 16 && second <= 31) return false;
+  }
+
+  return true;
+}
+
 export async function lookup(
   rawDomain: string,
   options?: LookupOptions,
@@ -53,9 +92,26 @@ export async function lookup(
   }
 
   const { registrableDomain, suffix } = parsed;
+  // Every lookup table is keyed by ASCII (punycode) suffixes.
+  const asciiSuffix = toAscii(suffix);
+
+  const requestedPool = options?.proxyPoolUrl;
+  if (requestedPool) {
+    if (!CONFIG.ALLOW_CUSTOM_PROXY_POOL) {
+      return { code: 1, msg: "Custom proxy pools are disabled.", data: null };
+    }
+    if (!isAllowedProxyPoolUrl(requestedPool)) {
+      return {
+        code: 1,
+        msg: "The 'proxy_pool' parameter must be a public http(s) URL.",
+        data: null,
+      };
+    }
+  }
+  const proxyPoolUrl = requestedPool || CONFIG.WHOIS_PROXY_POOL_URL || undefined;
 
   // Priority 1: RDAP
-  const rdapServer = (RDAP_MAP as Record<string, string>)[suffix];
+  const rdapServer = findRdapServer(suffix);
   if (rdapServer) {
     try {
       const rdapResponse = await fetchRdap(rdapServer, registrableDomain);
@@ -75,10 +131,7 @@ export async function lookup(
   }
 
   // Priority 2: WHOIS via proxy pool
-  const whoisHost = (WHOIS_MAP as Record<string, string>)[suffix];
-  // Use URL param override > config default
-  const proxyPoolUrl = options?.proxyPoolUrl || CONFIG.WHOIS_PROXY_POOL_URL || undefined;
-  if (whoisHost && proxyPoolUrl) {
+  if (hasWhoisServer(suffix) && proxyPoolUrl) {
     try {
       const whoisResponse = await fetchWhoisViaProxy(proxyPoolUrl, registrableDomain, suffix);
       if (whoisResponse) {
@@ -100,9 +153,9 @@ export async function lookup(
 
   // Priority 3: Web scraper
   const webTlds = WEB_TLDS as string[];
-  if (webTlds.includes(suffix)) {
+  if (webTlds.includes(suffix) || webTlds.includes(asciiSuffix)) {
     try {
-      const scraperResult = await fetchViaWebScraper(registrableDomain, suffix);
+      const scraperResult = await fetchViaWebScraper(registrableDomain, asciiSuffix);
       if (scraperResult) {
         const result = parseWhoisText(scraperResult.rawText);
         if (hasGoodResult(result)) {
@@ -123,8 +176,8 @@ export async function lookup(
   // All sources exhausted
   const availableSources: string[] = [];
   if (rdapServer) availableSources.push("RDAP");
-  if (whoisHost && proxyPoolUrl) availableSources.push("WHOIS");
-  if (webTlds.includes(suffix)) availableSources.push("Web");
+  if (hasWhoisServer(suffix) && proxyPoolUrl) availableSources.push("WHOIS");
+  if (webTlds.includes(suffix) || webTlds.includes(asciiSuffix)) availableSources.push("Web");
 
   if (availableSources.length === 0) {
     return {

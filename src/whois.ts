@@ -1,4 +1,5 @@
 import { WHOIS_SERVERS, WHOIS_CUSTOM_QUERIES } from "./data/whois-servers";
+import { toAscii } from "./idna";
 
 export interface WhoisResponse {
   server: string;
@@ -13,29 +14,39 @@ export interface ProxyEntry {
 }
 
 export function findWhoisServer(tld: string): { host: string; query: string } | null {
-  const custom = WHOIS_CUSTOM_QUERIES[tld];
+  const asciiTld = toAscii(tld);
+  const custom = WHOIS_CUSTOM_QUERIES[asciiTld] ?? WHOIS_CUSTOM_QUERIES[tld];
   if (custom) return custom;
 
-  const host = WHOIS_SERVERS[tld];
+  const host = WHOIS_SERVERS[asciiTld] ?? WHOIS_SERVERS[tld];
   if (host) return { host, query: "%s\r\n" };
 
   return null;
 }
 
+/** True when a WHOIS server is known for the given public suffix. */
+export function hasWhoisServer(tld: string): boolean {
+  return findWhoisServer(tld) !== null;
+}
+
 async function loadProxyPool(poolUrl: string): Promise<ProxyEntry[]> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
     const resp = await fetch(poolUrl, { signal: controller.signal });
-    clearTimeout(timeout);
     if (!resp.ok) return [];
-    const json = await resp.json();
+    const json: unknown = await resp.json();
     if (Array.isArray(json)) return json as ProxyEntry[];
-    if (json.servers && Array.isArray(json.servers)) return json.servers as ProxyEntry[];
-    if (json.proxies && Array.isArray(json.proxies)) return json.proxies as ProxyEntry[];
+    if (json && typeof json === "object") {
+      const obj = json as Record<string, unknown>;
+      if (Array.isArray(obj.servers)) return obj.servers as ProxyEntry[];
+      if (Array.isArray(obj.proxies)) return obj.proxies as ProxyEntry[];
+    }
     return [];
   } catch {
     return [];
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -85,15 +96,15 @@ async function trySingleProxy(
   domain: string,
   serverInfo: { host: string; query: string },
 ): Promise<WhoisResponse | null> {
-  const url = new URL(proxy.url);
-  url.searchParams.set("domain", domain);
-  url.searchParams.set("server", serverInfo.host);
-  url.searchParams.set("query", serverInfo.query);
-
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
 
   try {
+    const url = new URL(proxy.url);
+    url.searchParams.set("domain", domain);
+    url.searchParams.set("server", serverInfo.host);
+    url.searchParams.set("query", serverInfo.query);
+
     const response = await fetch(url.toString(), {
       signal: controller.signal,
       headers: { Accept: "text/plain" },

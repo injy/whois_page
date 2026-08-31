@@ -1,16 +1,79 @@
 import { WebScraperResult } from "../scraper";
 
-// Helper function to extract text from HTML
-function extractText(html: string, selector: string): string {
-  const match = html.match(new RegExp(selector, "i"));
-  return match ? match[1].trim() : "";
+const FETCH_TIMEOUT_MS = 12000;
+
+/**
+ * Every registry is a third party site, so all scraper requests are bounded.
+ */
+async function fetchTimeout(url: string, init?: RequestInit): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+const HTML_ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+};
+
+/**
+ * Turns a registry HTML page into "Key: Value" text so that parseWhoisText()
+ * can read it. Handing raw HTML to the text parser produced garbage fields
+ * and false "unregistered" matches on words such as "not found".
+ */
+export function htmlToWhoisText(html: string): string {
+  let text = html;
+
+  text = text.replace(
+    /<(script|style|noscript|svg|head|nav|footer|header)[\s\S]*?<\/\1>/gi,
+    " ",
+  );
+
+  // Table rows become "Label: Value" lines.
+  text = text.replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, (_match, row: string) => {
+    const cells = row.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi) || [];
+    const values = cells
+      .map((cell) => cell.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim())
+      .filter(Boolean);
+    if (values.length >= 2) {
+      return `${values[0]}: ${values.slice(1).join(", ")}\n`;
+    }
+    return values.length ? `${values.join("\n")}\n` : "\n";
+  });
+
+  text = text.replace(/<\/(p|div|li|h[1-6]|table|pre|section)>/gi, "\n");
+  text = text.replace(/<(br|hr)\s*\/?>/gi, "\n");
+  text = text.replace(/<[^>]+>/g, " ");
+
+  text = text.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, code: string) => {
+    const named = HTML_ENTITIES[code.toLowerCase()];
+    if (named !== undefined) return named;
+    if (/^#x/i.test(code)) return String.fromCodePoint(parseInt(code.slice(2), 16));
+    if (/^#/.test(code)) return String.fromCodePoint(parseInt(code.slice(1), 10));
+    return match;
+  });
+
+  return text
+    .split("\n")
+    .map((line) => line.replace(/[ \t ]+/g, " ").trim())
+    .filter((line) => line.length > 0)
+    .join("\n")
+    .trim();
 }
 
 // CN - China NIC
 export const cnScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://whois.cnnic.cn/whois?domain=${encodeURIComponent(domain)}&lang=en`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -22,7 +85,7 @@ export const cnScraper = async (domain: string): Promise<WebScraperResult | null
     if (match) {
       return { rawText: match[1] };
     }
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -32,7 +95,7 @@ export const cnScraper = async (domain: string): Promise<WebScraperResult | null
 export const jpScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://whois.jprs.jp/cgi-bin/whois_gw?lang=e&key=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -44,7 +107,7 @@ export const jpScraper = async (domain: string): Promise<WebScraperResult | null
     if (match) {
       return { rawText: match[1] };
     }
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -54,7 +117,7 @@ export const jpScraper = async (domain: string): Promise<WebScraperResult | null
 export const ukScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://whois.nominet.uk/${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -66,7 +129,7 @@ export const ukScraper = async (domain: string): Promise<WebScraperResult | null
     if (match) {
       return { rawText: match[1].replace(/<[^>]+>/g, "") };
     }
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -76,7 +139,7 @@ export const ukScraper = async (domain: string): Promise<WebScraperResult | null
 export const deScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.denic.de/en/whois/?domain=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -84,7 +147,7 @@ export const deScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -94,7 +157,7 @@ export const deScraper = async (domain: string): Promise<WebScraperResult | null
 export const frScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.afnic.fr/outils/whois/recherche.html?query=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -102,7 +165,7 @@ export const frScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -112,7 +175,7 @@ export const frScraper = async (domain: string): Promise<WebScraperResult | null
 export const itScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.nic.it/en/whois-search?search=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -120,7 +183,7 @@ export const itScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -130,7 +193,7 @@ export const itScraper = async (domain: string): Promise<WebScraperResult | null
 export const brScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://registro.br/whois/?domain=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -138,7 +201,7 @@ export const brScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -148,7 +211,7 @@ export const brScraper = async (domain: string): Promise<WebScraperResult | null
 export const ruScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.tcinet.ru/query/whois?domain=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -156,7 +219,7 @@ export const ruScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -166,7 +229,7 @@ export const ruScraper = async (domain: string): Promise<WebScraperResult | null
 export const krScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://whois.kisa.or.kr/eng/whoisView.jsp?isDomain=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -174,7 +237,7 @@ export const krScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -184,7 +247,7 @@ export const krScraper = async (domain: string): Promise<WebScraperResult | null
 export const twScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.twnic.net/whois/whois.php?domain=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -192,7 +255,7 @@ export const twScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -202,7 +265,7 @@ export const twScraper = async (domain: string): Promise<WebScraperResult | null
 export const hkScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.hkirc.hk/en/domain-services/whois?domain=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -210,7 +273,7 @@ export const hkScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -220,7 +283,7 @@ export const hkScraper = async (domain: string): Promise<WebScraperResult | null
 export const gtScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.gt/sitio/whois.php?dn=${encodeURIComponent(domain)}&lang=en`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -280,7 +343,7 @@ export const gtScraper = async (domain: string): Promise<WebScraperResult | null
 export const bbScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://whois.telecoms.gov.bb/status/${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -294,7 +357,7 @@ export const bbScraper = async (domain: string): Promise<WebScraperResult | null
     if (match && match[2]) {
       return { rawText: match[2].trim() };
     }
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -311,7 +374,7 @@ export const boScraper = async (domain: string): Promise<WebScraperResult | null
       enviar: "",
     });
     
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -321,7 +384,7 @@ export const boScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -337,14 +400,14 @@ export const btScraper = async (domain: string): Promise<WebScraperResult | null
     });
     const url = `https://www.nic.bt/search?${params.toString()}`;
     
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -356,7 +419,7 @@ export const cuScraper = async (domain: string): Promise<WebScraperResult | null
     const url = "https://www.nic.cu/dom_search.php";
     const formData = new URLSearchParams({ domsrch: domain });
     
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -366,7 +429,7 @@ export const cuScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -376,7 +439,7 @@ export const cuScraper = async (domain: string): Promise<WebScraperResult | null
 export const dzScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://api.nic.dz/v1/domains/${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
@@ -419,7 +482,7 @@ export const gfScraper = async (domain: string): Promise<WebScraperResult | null
       UQWhRrMF: "." + parts[1],
     });
     
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -429,7 +492,7 @@ export const gfScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -440,7 +503,7 @@ export const grScraper = async (domain: string): Promise<WebScraperResult | null
   try {
     // First get CSRF token
     const getUrl = "https://grweb.ics.forth.gr/public/whois?lang=en";
-    const getResponse = await fetch(getUrl, {
+    const getResponse = await fetchTimeout(getUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
@@ -464,7 +527,7 @@ export const grScraper = async (domain: string): Promise<WebScraperResult | null
       Submit: "",
     });
     
-    const postResponse = await fetch(postUrl, {
+    const postResponse = await fetchTimeout(postUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -485,7 +548,7 @@ export const grScraper = async (domain: string): Promise<WebScraperResult | null
 export const gwScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://registar.nic.gw/en/whois/${encodeURIComponent(domain.replace(/\./g, "-"))}/`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -495,7 +558,7 @@ export const gwScraper = async (domain: string): Promise<WebScraperResult | null
     if (!response.ok) {
       // Try without the trailing slash
       const url2 = `https://registar.nic.gw/en/whois/${encodeURIComponent(domain.replace(/\./g, "-"))}`;
-      const response2 = await fetch(url2, {
+      const response2 = await fetchTimeout(url2, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         },
@@ -600,7 +663,7 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
   try {
     // First get cookies
     const homeUrl = "https://www.registry.hm";
-    const homeResponse = await fetch(homeUrl, {
+    const homeResponse = await fetchTimeout(homeUrl, {
       method: "HEAD",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -615,7 +678,7 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
       submit: "Check WHOIS record",
     });
     
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -632,7 +695,7 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
     if (match) {
       return { rawText: match[1] };
     }
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -642,17 +705,15 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
 export const huScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://info.domain.hu/webwhois/en/domain/${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
-      method: "POST",
+    const response = await fetchTimeout(url, {
       headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
-      body: "",
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -662,7 +723,7 @@ export const huScraper = async (domain: string): Promise<WebScraperResult | null
 export const joScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = "https://dns.jo/FirstPageen.aspx";
-    const getResponse = await fetch(url, {
+    const getResponse = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
@@ -672,7 +733,7 @@ export const joScraper = async (domain: string): Promise<WebScraperResult | null
     
     // This is a complex ASP.NET form, simplified version
     const html = await getResponse.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -682,7 +743,7 @@ export const joScraper = async (domain: string): Promise<WebScraperResult | null
 export const mtScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.nic.org.mt/dotmt/whois/?${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
@@ -695,7 +756,7 @@ export const mtScraper = async (domain: string): Promise<WebScraperResult | null
     if (match) {
       return { rawText: match[1] };
     }
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -705,7 +766,7 @@ export const mtScraper = async (domain: string): Promise<WebScraperResult | null
 export const niScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://apiecommercenic.uni.edu.ni/api/v1/dominios/whois?dominio=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
@@ -738,7 +799,7 @@ export const npScraper = async (domain: string): Promise<WebScraperResult | null
     const parts = domain.split(".");
     // First get token
     const getUrl = "https://register.com.np/whois-lookup";
-    const getResponse = await fetch(getUrl, {
+    const getResponse = await fetchTimeout(getUrl, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
@@ -760,7 +821,7 @@ export const npScraper = async (domain: string): Promise<WebScraperResult | null
       domainExtension: "." + parts[1],
     });
     
-    const postResponse = await fetch(postUrl, {
+    const postResponse = await fetchTimeout(postUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -781,7 +842,7 @@ export const npScraper = async (domain: string): Promise<WebScraperResult | null
 export const paScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://nic.pa:8080/whois/${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
@@ -815,7 +876,7 @@ export const paScraper = async (domain: string): Promise<WebScraperResult | null
 export const phScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://whois.dot.ph/?search=${encodeURIComponent(domain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
@@ -828,7 +889,7 @@ export const phScraper = async (domain: string): Promise<WebScraperResult | null
     if (match) {
       return { rawText: match[1] };
     }
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -844,7 +905,7 @@ export const svScraper = async (domain: string): Promise<WebScraperResult | null
       nombre: parts[0],
     });
     
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -854,7 +915,7 @@ export const svScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -863,16 +924,16 @@ export const svScraper = async (domain: string): Promise<WebScraperResult | null
 // TJ - Tajikistan (from original project getTJ())
 export const tjScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
-    const shortDomain = domain.substring(0, domain.length - 3);
+    const shortDomain = domain.replace(/\.[^.]+$/, "");
     const url = `http://www.nic.tj/cgi/whois2?domain=${encodeURIComponent(shortDomain)}`;
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -887,7 +948,7 @@ export const ttScraper = async (domain: string): Promise<WebScraperResult | null
       Search: "Search",
     });
     
-    const response = await fetch(url, {
+    const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -897,7 +958,7 @@ export const ttScraper = async (domain: string): Promise<WebScraperResult | null
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: html };
+    return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
@@ -907,7 +968,7 @@ export const ttScraper = async (domain: string): Promise<WebScraperResult | null
 export const vnScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://whois.inet.vn/whois?domain=${encodeURIComponent(domain)}`;
-    const headResponse = await fetch(url, {
+    const headResponse = await fetchTimeout(url, {
       method: "HEAD",
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -916,7 +977,7 @@ export const vnScraper = async (domain: string): Promise<WebScraperResult | null
     const cookies = headResponse.headers.get("set-cookie") || "";
     
     const apiUrl = `https://whois.inet.vn/api/whois/domainspecify/${encodeURIComponent(domain)}`;
-    const response = await fetch(apiUrl, {
+    const response = await fetchTimeout(apiUrl, {
       headers: {
         "X-Requested-With": "XMLHttpRequest",
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
@@ -967,15 +1028,17 @@ export const vnScraper = async (domain: string): Promise<WebScraperResult | null
 
 // Generic web scraper for other TLDs
 export const genericScraper = async (tld: string, domain: string): Promise<WebScraperResult | null> => {
+  // "com.hk" is a public suffix, but its registry lives under "hk".
+  const base = tld.split(".").pop() || tld;
   const urls = [
-    `https://whois.${tld}/${encodeURIComponent(domain)}`,
-    `https://www.nic.${tld}/whois?domain=${encodeURIComponent(domain)}`,
-    `https://whois.nic.${tld}/lookup?domain=${encodeURIComponent(domain)}`,
+    `https://whois.${base}/${encodeURIComponent(domain)}`,
+    `https://www.nic.${base}/whois?domain=${encodeURIComponent(domain)}`,
+    `https://whois.nic.${base}/lookup?domain=${encodeURIComponent(domain)}`,
   ];
 
   for (const url of urls) {
     try {
-      const response = await fetch(url, {
+      const response = await fetchTimeout(url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -983,7 +1046,7 @@ export const genericScraper = async (tld: string, domain: string): Promise<WebSc
       });
       if (response.ok) {
         const html = await response.text();
-        return { rawText: html };
+        return { rawText: htmlToWhoisText(html) };
       }
     } catch {
       continue;

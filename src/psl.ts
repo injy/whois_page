@@ -5,6 +5,8 @@ interface PslResult {
   suffix: string;
 }
 
+const NON_ASCII_RE = /[^\x00-\x7F]/;
+
 const exactSet = new Set<string>();
 const wildcardParents = new Set<string>();
 const exceptionSet = new Set<string>();
@@ -51,6 +53,16 @@ export function parseDomain(input: string): PslResult | null {
 
   const suffix = labels[labels.length - 1];
   if (exactSet.has(suffix) && labels.length >= 2) {
+    return {
+      registrableDomain: domain,
+      suffix,
+    };
+  }
+
+  // The bundled PSL snapshot contains no IDN rules, so unicode TLDs (e.g.
+  // "рф") and their punycode form (e.g. "xn--p1ai") never match a rule.
+  // Fall back to "the last label is the public suffix" for those.
+  if (labels.length >= 2 && (NON_ASCII_RE.test(suffix) || suffix.startsWith("xn--"))) {
     return {
       registrableDomain: domain,
       suffix,

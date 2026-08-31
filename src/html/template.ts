@@ -21,6 +21,9 @@ ${getCSS()}
 <div class="root">
   <header>
     <div class="header-actions">
+      <button class="theme-switcher" id="settings-btn" aria-label="Settings">
+        <svg width="1em" height="1em" viewBox="0 -960 960 960" fill="currentColor"><path d="m388-80-20-126q-19-7-40-19t-37-25l-118 54-93-164 108-79q-2-9-2.5-20.5T185-480q0-9 .5-20.5T188-521L80-600l93-164 118 54q16-13 37-25t40-18l20-127h184l20 126q19 7 40.5 18.5T669-710l118-54 93 164-108 77q2 10 2.5 21.5t.5 21.5q0 10-.5 21t-2.5 21l108 78-93 164-118-54q-16 13-36.5 25.5T592-206L572-80H388Zm92-270q54 0 92-38t38-92q0-54-38-92t-92-38q-54 0-92 38t-38 92q0 54 38 92t92 38Zm0-60q-29 0-49.5-20.5T410-480q0-29 20.5-49.5T480-550q29 0 49.5 20.5T550-480q0 29-20.5 49.5T480-410Z"/></svg>
+      </button>
       <button class="theme-switcher" id="theme-switcher" aria-label="Switch theme">
         <svg width="1em" height="1em" viewBox="0 -960 960 960" fill="currentColor"><path d="M480-80q-82 0-155-31.5t-127.5-86Q143-252 111.5-325T80-480q0-83 32.5-156t88-127Q256-817 330-848.5T488-880q80 0 151 27.5t124.5 76q53.5 48.5 85 115T880-518q0 115-70 176.5T640-280h-74q-9 0-12.5 5t-3.5 11q0 12 15 34.5t15 51.5q0 50-27.5 74T480-80Zm0-400Zm-220 40q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120-160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm200 0q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120 160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17ZM480-160q9 0 14.5-5t5.5-13q0-14-15-33t-15-57q0-42 29-67t71-25h70q66 0 113-38.5T800-518q0-121-92.5-201.5T488-800q-136 0-232 93t-96 227q0 133 93.5 226.5T480-160Z"/></svg>
       </button>
@@ -45,6 +48,25 @@ ${getCSS()}
 <button class="back-to-top" id="back-to-top" aria-label="Back to top">
   <svg width="1em" height="1em" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-760q-17 0-28.5-11.5T160-800q0-17 11.5-28.5T200-840h560q17 0 28.5 11.5T800-800q0 17-11.5 28.5T760-760H200Zm280 640q-17 0-28.5-11.5T440-160v-368l-76 76q-11 11-28 11t-28-11q-11-11-11-28t11-28l144-144q6-6 13-8.5t15-2.5q8 0 15 2.5t13 8.5l144 144q11 11 11 28t-11 28q-11 11-28 11t-28-11l-76-76v368q0 17-11.5 28.5T480-120Z"/></svg>
 </button>
+<dialog class="dialog" id="settings-dialog">
+  <div class="dialog-body">
+    <div class="dialog-head">
+      <h2 class="dialog-title">Settings</h2>
+      <button class="icon-button" id="settings-close" type="button" aria-label="Close">
+        <svg width="1em" height="1em" viewBox="0 -960 960 960" fill="currentColor"><path d="M480-429 316-265q-11 11-25 10.5T266-266q-11-11-11-25.5t11-25.5l163-163-164-164q-11-11-10.5-25.5T266-695q11-11 25.5-11t25.5 11l163 164 164-164q11-11 25.5-11t25.5 11q11 11 11 25.5T695-644L531-480l164 164q11 11 11 25t-11 25q-11 11-25.5 11T644-266L480-429Z"/></svg>
+      </button>
+    </div>
+    <label class="field">
+      <span class="field-label">WHOIS proxy pool URL</span>
+      <input class="input dialog-input" id="proxy-pool-input" type="url" autocomplete="off" placeholder="https://example.com/pool.json" spellcheck="false">
+    </label>
+    <p class="dialog-hint">Leave empty to use the server default. Stored in this browser only.</p>
+    <div class="dialog-actions">
+      <button class="ghost-button" id="settings-clear" type="button">Clear</button>
+      <button class="primary-button" id="settings-save" type="button"><span class="primary-button-label">Save</span></button>
+    </div>
+  </div>
+</dialog>
 <script>
 ${getJS()}
 </script>
@@ -135,6 +157,20 @@ code{display:inline-block;font-family:inherit;margin:1rem}
 .raw-data-panel.active{display:block}
 .back-to-top{background-color:var(--surface-back-to-top);border:1px solid var(--border-back-to-top);border-radius:50%;bottom:calc(3rem + env(safe-area-inset-bottom));box-shadow:var(--elevation-back-to-top);color:var(--text-secondary);font-size:1.5rem;opacity:0;padding:.5rem;position:fixed;right:calc(1.5rem + env(safe-area-inset-right));visibility:hidden;z-index:999}
 .back-to-top:hover{background-color:var(--surface-back-to-top-hover);color:var(--text-primary)}
+.dialog{background-color:var(--surface-card);border:1px solid var(--border-card);border-radius:1rem;box-shadow:var(--elevation-card);color:var(--text-primary);max-width:min(28rem,calc(100vw - 3rem));padding:0;width:100%}
+.dialog::backdrop{background-color:#0c1f3f66;backdrop-filter:blur(2px)}
+.dialog-body{display:grid;gap:1rem;padding:1rem}
+.dialog-head{align-items:center;display:flex;gap:.5rem;justify-content:space-between}
+.dialog-title{font-size:1rem;margin:0}
+.icon-button{border-radius:50%;color:var(--text-secondary);font-size:1.25rem;padding:.25rem}
+.icon-button:hover{background-color:var(--surface-toggle-hover);color:var(--text-primary)}
+.field{display:grid;gap:.375rem}
+.field-label{color:var(--text-muted);font-size:.75rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.dialog-input{border-radius:.75rem;padding-left:1rem;padding-right:1rem;width:100%}
+.dialog-hint{color:var(--text-muted);font-size:.75rem;margin:0}
+.dialog-actions{display:flex;gap:.5rem;justify-content:flex-end}
+.ghost-button{border:1px solid var(--border-input);border-radius:999px;color:var(--text-secondary);font-weight:600;padding:.75rem 1.5rem}
+.ghost-button:hover{background-color:var(--surface-toggle-hover)}
 @media(max-width:36rem){h1{text-align:center}form,.card-items{grid-template-columns:1fr}.input-box{grid-column:auto}}
 `;
 }
@@ -149,6 +185,18 @@ function getJS(): string {
   var results=document.getElementById("results");
   var backToTop=document.getElementById("back-to-top");
   var themeSwitcher=document.getElementById("theme-switcher");
+
+  // Proxy pool stored in this browser only
+  var PROXY_POOL_KEY="whois_proxy_pool";
+  function getProxyPoolUrl(){
+    try{return localStorage.getItem(PROXY_POOL_KEY)||""}catch(err){return ""}
+  }
+  function setProxyPoolUrl(url){
+    try{
+      if(url)localStorage.setItem(PROXY_POOL_KEY,url);
+      else localStorage.removeItem(PROXY_POOL_KEY);
+    }catch(err){}
+  }
 
   // Theme toggle
   themeSwitcher.addEventListener("click",function(){
@@ -387,9 +435,9 @@ function getJS(): string {
   }
 
   function esc(s){
-    if(!s)return"";
+    if(s==null)return"";
     var div=document.createElement("div");
-    div.textContent=s;
+    div.textContent=String(s);
     return div.innerHTML;
   }
 

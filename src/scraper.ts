@@ -80,10 +80,6 @@ export async function fetchViaWebScraper(
   }
 }
 
-export function hasScraper(tld: string): boolean {
-  return tld in scraperMap || webTlds.has(tld);
-}
-
 export function listWebTlds(): string[] {
   return Array.from(webTlds).sort();
 }

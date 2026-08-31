@@ -57,11 +57,15 @@ export function parseRdap(
 ): WhoisResult {
   const empty = createEmpty();
 
-  let json: Record<string, any> = {};
+  let json: Record<string, any>;
   try {
-    json = JSON.parse(rawData);
+    const parsed: unknown = JSON.parse(rawData);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return unparsable(empty, code);
+    }
+    json = parsed as Record<string, any>;
   } catch {
-    return empty;
+    return unparsable(empty, code);
   }
 
   if (isReserved(json)) {
@@ -71,11 +75,6 @@ export function parseRdap(
 
   empty.registered = code !== 404;
   if (!empty.registered) return empty;
-
-  if (!rawData) {
-    empty.unknown = true;
-    return empty;
-  }
 
   empty.domain = getDomain(json);
   setLinks(json, _extension, empty);
@@ -106,6 +105,23 @@ export function parseRdap(
   if (empty.unknown) empty.registered = false;
 
   return empty;
+}
+
+/**
+ * The RDAP response could not be read as an object: it may be empty, or the
+ * server may have answered with an HTML error / rate-limit page. Reporting
+ * such a response as "unregistered" would be a false negative, so it is
+ * flagged as unknown instead and the caller falls back to WHOIS / scraping.
+ * A 404 stays authoritative: the object really does not exist.
+ */
+function unparsable(result: WhoisResult, code: number): WhoisResult {
+  if (code === 404) {
+    result.registered = false;
+    return result;
+  }
+  result.unknown = true;
+  result.registered = false;
+  return result;
 }
 
 function createEmpty(): WhoisResult {

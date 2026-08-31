@@ -1,5 +1,6 @@
 import { lookup, type LookupOptions } from "./api";
 import { getHtml } from "./html/template";
+import { parseDomain } from "./psl";
 
 // ─── Shared handler (platform-agnostic) ───────────────────────────────
 
@@ -50,6 +51,18 @@ function handleNotFound(): Response {
   return new Response("Not Found", { status: 404 });
 }
 
+function handleOptions(): Response {
+  return new Response(null, {
+    status: 204,
+    headers: {
+      "access-control-allow-origin": "*",
+      "access-control-allow-methods": "GET, OPTIONS",
+      "access-control-allow-headers": "content-type",
+      "access-control-max-age": "86400",
+    },
+  });
+}
+
 // ─── Route resolution helper ──────────────────────────────────────────
 
 /**
@@ -62,11 +75,13 @@ function handleNotFound(): Response {
  *   /api/                      → JSON API
  *   /api/?domain=google.com    → JSON API
  *   /api/google.com            → JSON API (path param)
+ *
+ * Anything else (e.g. /favicon.ico) is a 404 instead of a bogus lookup.
  */
 function resolveRoute(
   pathname: string,
   searchParams: URLSearchParams,
-): { mode: "api" | "page"; domain?: string } {
+): { mode: "api" | "page" | "notfound"; domain?: string } {
   // Strip leading/trailing slashes for comparison
   const path = pathname.replace(/^\/+|\/+$/g, "");
 
@@ -88,37 +103,59 @@ function resolveRoute(
   // /api/something → API with path as domain
   if (path.startsWith("api/")) {
     const domainFromPath = path.slice(4); // remove "api/"
+    if (domainFromPath && !isDomainLike(domainFromPath)) {
+      return { mode: "notfound" };
+    }
     const domain = domainFromPath || searchParams.get("domain") || "";
     return { mode: "api", domain };
   }
 
   // /something → API with path as domain (e.g. /google.com)
   if (path) {
-    const domainFromPath = path;
-    const domain = domainFromPath || searchParams.get("domain") || "";
-    return { mode: "api", domain };
+    if (!isDomainLike(path)) {
+      return { mode: "notfound" };
+    }
+    return { mode: "api", domain: path };
   }
 
   // Fallback: HTML page
   return { mode: "page" };
 }
 
+/** Keeps static assets such as /favicon.ico from being treated as domains. */
+function isDomainLike(value: string): boolean {
+  if (value.includes("/") || value.includes("%")) return false;
+  return parseDomain(value) !== null;
+}
+
+function respond(route: { mode: "api" | "page" | "notfound"; domain?: string }, url: URL): Promise<Response> | Response {
+  if (route.mode === "notfound") {
+    return handleNotFound();
+  }
+
+  if (route.mode === "api") {
+    // Override domain in URL for handleApiRequest
+    if (route.domain) {
+      url.searchParams.set("domain", route.domain);
+    }
+    return handleApiRequest(url);
+  }
+
+  return handleRootRequest();
+}
+
 // ─── Cloudflare Workers adapter ───────────────────────────────────────
 
 export default {
   async fetch(request: Request): Promise<Response> {
+    if (request.method === "OPTIONS") {
+      return handleOptions();
+    }
+
     const url = new URL(request.url);
     const route = resolveRoute(url.pathname, url.searchParams);
 
-    if (route.mode === "api") {
-      // Override domain in URL for handleApiRequest
-      if (route.domain) {
-        url.searchParams.set("domain", route.domain);
-      }
-      return handleApiRequest(url);
-    }
-
-    return handleRootRequest();
+    return respond(route, url);
   },
 };
 
@@ -127,6 +164,10 @@ export default {
 // Entry: src/adapters/tencent.handler
 
 export async function tencentHandler(event: any, _context: any): Promise<any> {
+  if (event.httpMethod === "OPTIONS") {
+    return { statusCode: 204, headers: {}, body: "" };
+  }
+
   const qs = event.queryString || {};
   const params = new URLSearchParams(qs);
   const route = resolveRoute(event.path || "/", params);
@@ -137,19 +178,7 @@ export async function tencentHandler(event: any, _context: any): Promise<any> {
     url.searchParams.set(k, v);
   }
 
-  if (route.mode === "api") {
-    if (route.domain) {
-      url.searchParams.set("domain", route.domain);
-    }
-    const resp = await handleApiRequest(url);
-    return {
-      statusCode: resp.status,
-      headers: Object.fromEntries(resp.headers.entries()),
-      body: await resp.text(),
-    };
-  }
-
-  const resp = handleRootRequest();
+  const resp = await respond(route, url);
   return {
     statusCode: resp.status,
     headers: Object.fromEntries(resp.headers.entries()),
@@ -162,15 +191,11 @@ export async function tencentHandler(event: any, _context: any): Promise<any> {
 // Entry: src/adapters/aliyun.handler
 
 export async function aliyunHandler(request: any, context: any): Promise<any> {
-  const url = new URL(request.url);
-  const route = resolveRoute(url.pathname, url.searchParams);
-
-  if (route.mode === "api") {
-    if (route.domain) {
-      url.searchParams.set("domain", route.domain);
-    }
-    return handleApiRequest(url);
+  if (request.method === "OPTIONS") {
+    return handleOptions();
   }
 
-  return handleRootRequest();
+  const url = new URL(request.url);
+
+  return respond(resolveRoute(url.pathname, url.searchParams), url);
 }
