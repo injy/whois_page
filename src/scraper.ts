@@ -1,3 +1,5 @@
+import WEB_TLDS from "./data/tld-web.json";
+
 export interface WebScraperResult {
   rawText: string;
 }
@@ -5,6 +7,7 @@ export interface WebScraperResult {
 type ScraperFn = (domain: string, labels: string[]) => Promise<WebScraperResult | null>;
 
 const scrapers: Record<string, ScraperFn> = {};
+const webTlds = new Set(WEB_TLDS as string[]);
 
 export function registerScraper(tld: string, fn: ScraperFn): void {
   scrapers[tld] = fn;
@@ -26,5 +29,9 @@ export async function fetchViaWebScraper(
 }
 
 export function hasScraper(tld: string): boolean {
-  return tld in scrapers;
+  return webTlds.has(tld);
+}
+
+export function listWebTlds(): string[] {
+  return Array.from(webTlds).sort();
 }
