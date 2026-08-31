@@ -50,25 +50,75 @@ function handleNotFound(): Response {
   return new Response("Not Found", { status: 404 });
 }
 
+// ─── Route resolution helper ──────────────────────────────────────────
+
+/**
+ * Resolves a request into either an API call or the HTML page.
+ *
+ * Supported patterns:
+ *   /                          → HTML page
+ *   /?domain=google.com        → JSON API
+ *   /google.com                → JSON API (path param)
+ *   /api/                      → JSON API
+ *   /api/?domain=google.com    → JSON API
+ *   /api/google.com            → JSON API (path param)
+ */
+function resolveRoute(
+  pathname: string,
+  searchParams: URLSearchParams,
+): { mode: "api" | "page"; domain?: string } {
+  // Strip leading/trailing slashes for comparison
+  const path = pathname.replace(/^\/+|\/+$/g, "");
+
+  // Exact root with no domain query → HTML page
+  if (!path && !searchParams.has("domain")) {
+    return { mode: "page" };
+  }
+
+  // Root with ?domain= → API
+  if (!path && searchParams.has("domain")) {
+    return { mode: "api", domain: searchParams.get("domain") || "" };
+  }
+
+  // /api or /api/lookup → API
+  if (path === "api" || path === "api/lookup") {
+    return { mode: "api", domain: searchParams.get("domain") || "" };
+  }
+
+  // /api/something → API with path as domain
+  if (path.startsWith("api/")) {
+    const domainFromPath = path.slice(4); // remove "api/"
+    const domain = domainFromPath || searchParams.get("domain") || "";
+    return { mode: "api", domain };
+  }
+
+  // /something → API with path as domain (e.g. /google.com)
+  if (path) {
+    const domainFromPath = path;
+    const domain = domainFromPath || searchParams.get("domain") || "";
+    return { mode: "api", domain };
+  }
+
+  // Fallback: HTML page
+  return { mode: "page" };
+}
+
 // ─── Cloudflare Workers adapter ───────────────────────────────────────
 
 export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
+    const route = resolveRoute(url.pathname, url.searchParams);
 
-    if (url.pathname === "/api/lookup" || url.pathname === "/api/") {
+    if (route.mode === "api") {
+      // Override domain in URL for handleApiRequest
+      if (route.domain) {
+        url.searchParams.set("domain", route.domain);
+      }
       return handleApiRequest(url);
     }
 
-    // Root path: serve HTML, but if ?domain= is present, also serve JSON API
-    if (url.pathname === "/" || url.pathname === "") {
-      if (url.searchParams.has("domain")) {
-        return handleApiRequest(url);
-      }
-      return handleRootRequest();
-    }
-
-    return handleNotFound();
+    return handleRootRequest();
   },
 };
 
@@ -77,12 +127,20 @@ export default {
 // Entry: src/adapters/tencent.handler
 
 export async function tencentHandler(event: any, _context: any): Promise<any> {
-  const url = new URL(
-    event.path + (event.queryString ? "?" + new URLSearchParams(event.queryString).toString() : ""),
-    "http://localhost",
-  );
+  const qs = event.queryString || {};
+  const params = new URLSearchParams(qs);
+  const route = resolveRoute(event.path || "/", params);
 
-  if (url.pathname === "/api/lookup" || url.pathname === "/api/") {
+  // Build a URL object for handleApiRequest
+  const url = new URL("http://localhost" + (event.path || "/"));
+  for (const [k, v] of params.entries()) {
+    url.searchParams.set(k, v);
+  }
+
+  if (route.mode === "api") {
+    if (route.domain) {
+      url.searchParams.set("domain", route.domain);
+    }
     const resp = await handleApiRequest(url);
     return {
       statusCode: resp.status,
@@ -91,25 +149,7 @@ export async function tencentHandler(event: any, _context: any): Promise<any> {
     };
   }
 
-  if (url.pathname === "/" || url.pathname === "") {
-    const params = new URLSearchParams(event.queryString);
-    if (params.has("domain")) {
-      const resp = await handleApiRequest(url);
-      return {
-        statusCode: resp.status,
-        headers: Object.fromEntries(resp.headers.entries()),
-        body: await resp.text(),
-      };
-    }
-    const resp = handleRootRequest();
-    return {
-      statusCode: resp.status,
-      headers: Object.fromEntries(resp.headers.entries()),
-      body: await resp.text(),
-    };
-  }
-
-  const resp = handleNotFound();
+  const resp = handleRootRequest();
   return {
     statusCode: resp.status,
     headers: Object.fromEntries(resp.headers.entries()),
@@ -117,23 +157,20 @@ export async function tencentHandler(event: any, _context: any): Promise<any> {
   };
 }
 
-// ─── Alibaba Cloud FC adapter ─────────────────────────────────────────
+// ─── Alibaba Cloud FC adapter ────────────────────────────────────────
 // Deploy as HTTP Function
 // Entry: src/adapters/aliyun.handler
 
 export async function aliyunHandler(request: any, context: any): Promise<any> {
   const url = new URL(request.url);
+  const route = resolveRoute(url.pathname, url.searchParams);
 
-  if (url.pathname === "/api/lookup" || url.pathname === "/api/") {
+  if (route.mode === "api") {
+    if (route.domain) {
+      url.searchParams.set("domain", route.domain);
+    }
     return handleApiRequest(url);
   }
 
-  if (url.pathname === "/" || url.pathname === "") {
-    if (url.searchParams.has("domain")) {
-      return handleApiRequest(url);
-    }
-    return handleRootRequest();
-  }
-
-  return handleNotFound();
+  return handleRootRequest();
 }
