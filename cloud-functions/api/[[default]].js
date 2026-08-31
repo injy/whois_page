@@ -10258,7 +10258,17 @@ var tld_web_default = [
   "uk",
   "uk.ac",
   "uz",
-  "ve"
+  "ve",
+  "ao",
+  "az",
+  "ba",
+  "cy",
+  "dj",
+  "gm",
+  "gq",
+  "lk",
+  "nr",
+  "py"
 ];
 
 // src/scrapers/index.ts
@@ -11197,6 +11207,184 @@ var vnScraper = async (domain) => {
     return null;
   }
 };
+var aoScraper = async (_domain) => {
+  try {
+    return { rawText: "Please visit https://www.dns.ao/ao/whois/" };
+  } catch {
+    return null;
+  }
+};
+var azScraper = async (_domain) => {
+  try {
+    return { rawText: "Please visit https://whois.az" };
+  } catch {
+    return null;
+  }
+};
+var baScraper = async (_domain) => {
+  try {
+    return { rawText: "Please visit https://nic.ba/?culture=en" };
+  } catch {
+    return null;
+  }
+};
+var cyScraper = async (_domain) => {
+  try {
+    return { rawText: "Please visit https://registry.nic.cy/cy-ui/home" };
+  } catch {
+    return null;
+  }
+};
+var djScraper = async (_domain) => {
+  try {
+    return { rawText: "Please visit https://dot.dj" };
+  } catch {
+    return null;
+  }
+};
+var gqScraper = async (_domain) => {
+  try {
+    return { rawText: "Please visit http://www.dominio.gq/en/whois.html" };
+  } catch {
+    return null;
+  }
+};
+var pyScraper = async (_domain) => {
+  try {
+    return { rawText: "Please visit https://www.nic.py/consultdompy.php" };
+  } catch {
+    return null;
+  }
+};
+var gmScraper = async (domain) => {
+  try {
+    const parts = domain.split(".");
+    const headUrl = `https://www.nic.gm/NIC2/scripts/checkdom.aspx?dname=${encodeURIComponent(parts[0])}`;
+    const headResponse = await fetchTimeout(headUrl, { method: "HEAD", redirect: "manual" });
+    const location = headResponse.headers.get("location") || "";
+    let whois = "";
+    if (location.includes("/NIC2/whois-available.html")) {
+      whois += `No match for "${domain}".
+`;
+    } else if (location.includes("/NIC2/whois-reserved.html") || location.includes("/NIC2/whois-numbers.html")) {
+      whois += "This name is reserved by the registry.\n";
+    } else if (location.includes("/NIC2/whois-details.html")) {
+      const detailUrl = `https://www.nic.gm/NIC2/REG/login.aspx?whois=${encodeURIComponent(parts[0])}`;
+      const detailResponse = await fetchTimeout(detailUrl);
+      const body = await detailResponse.text();
+      const array = body.split(";");
+      whois += `Domain Name: ${domain}
+`;
+      whois += `Registrar: ${array[2] || ""}
+`;
+      whois += `Creation Date: ${array[11] || ""}
+`;
+      whois += `Registrant Name: ${array[1] || ""}
+`;
+      whois += `Admin Name: ${array[3] || ""}
+`;
+      whois += `Admin Organization: ${array[4] || ""}
+`;
+      whois += `Tech Name: ${array[5] || ""}
+`;
+      whois += `Tech Organization: ${array[6] || ""}
+`;
+      whois += `Name Server: ${array[7] || ""}
+`;
+      whois += `Name Server: ${array[8] || ""}
+`;
+      whois += `Name Server: ${array[9] || ""}
+`;
+      whois += `Name Server: ${array[10] || ""}
+`;
+    }
+    if (whois) {
+      const motdResponse = await fetchTimeout("https://www.nic.gm/NIC2/motd.txt");
+      const motd = await motdResponse.text();
+      if (motd) {
+        whois += `>>> Last update of whois database: ${motd.trim()} <<<`;
+      }
+    }
+    return whois.trim() ? { rawText: whois } : null;
+  } catch {
+    return null;
+  }
+};
+var lkScraper = async (domain) => {
+  try {
+    const url = `https://register.domains.lk/proxy/domains/single-search?keyword=${encodeURIComponent(domain)}`;
+    const response = await fetchTimeout(url);
+    if (!response.ok)
+      return null;
+    const json = await response.json();
+    const availability = json?.result?.domainAvailability;
+    if (!availability)
+      return null;
+    let message = availability.message || "";
+    if (message === "Domain name you searched is restricted") {
+      message = "Domain name is restricted";
+    }
+    let whois = `Message: ${message}
+`;
+    whois += `Domain Name: ${availability.domainName || ""}
+`;
+    const domainInfo = availability.domainInfo;
+    if (domainInfo) {
+      const expireDate = parseLKDate(domainInfo.expireDate || "");
+      whois += `Registry Expiry Date: ${expireDate}
+`;
+      whois += `Registrant Name: ${domainInfo.registeredTo || ""}
+`;
+    }
+    return { rawText: whois };
+  } catch {
+    return null;
+  }
+};
+var nrScraper = async (domain) => {
+  try {
+    const parts = domain.split(".");
+    const params = new URLSearchParams({
+      subdomain: parts[0],
+      tld: parts[1] || "",
+      whois: "Submit"
+    });
+    const url = `https://www.cenpac.net.nr/dns/whois.html?${params.toString()}`;
+    const response = await fetchTimeout(url);
+    if (!response.ok)
+      return null;
+    const html = await response.text();
+    const formEnd = html.toLowerCase().lastIndexOf("</form>");
+    const body = formEnd >= 0 ? html.slice(formEnd + 6) : html;
+    const text = htmlToWhoisText(body);
+    return text ? { rawText: text } : null;
+  } catch {
+    return null;
+  }
+};
+function parseLKDate(input) {
+  const match = input.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s*,?\s*(\d{4})/);
+  if (!match)
+    return "";
+  const months = {
+    january: "01",
+    february: "02",
+    march: "03",
+    april: "04",
+    may: "05",
+    june: "06",
+    july: "07",
+    august: "08",
+    september: "09",
+    october: "10",
+    november: "11",
+    december: "12"
+  };
+  const month = months[match[2].toLowerCase()];
+  if (!month)
+    return "";
+  return `${match[3]}-${month}-${match[1].padStart(2, "0")}`;
+}
 var genericScraper = async (tld, domain) => {
   const base = tld.split(".").pop() || tld;
   const urls = [
@@ -11258,7 +11446,18 @@ var specificScrapers = {
   "sv": svScraper,
   "tj": tjScraper,
   "tt": ttScraper,
-  "vn": vnScraper
+  "vn": vnScraper,
+  "ao": aoScraper,
+  "az": azScraper,
+  "ba": baScraper,
+  "cy": cyScraper,
+  "dj": djScraper,
+  "gm": gmScraper,
+  "gq": gqScraper,
+  "lk": lkScraper,
+  "mq": gfScraper,
+  "nr": nrScraper,
+  "py": pyScraper
 };
 for (const tld of webTlds) {
   if (specificScrapers[tld]) {

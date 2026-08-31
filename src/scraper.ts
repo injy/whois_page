@@ -44,6 +44,17 @@ const specificScrapers: Record<string, (domain: string) => Promise<WebScraperRes
   "tj": scrapers.tjScraper,
   "tt": scrapers.ttScraper,
   "vn": scrapers.vnScraper,
+  "ao": scrapers.aoScraper,
+  "az": scrapers.azScraper,
+  "ba": scrapers.baScraper,
+  "cy": scrapers.cyScraper,
+  "dj": scrapers.djScraper,
+  "gm": scrapers.gmScraper,
+  "gq": scrapers.gqScraper,
+  "lk": scrapers.lkScraper,
+  "mq": scrapers.gfScraper,
+  "nr": scrapers.nrScraper,
+  "py": scrapers.pyScraper,
 };
 
 // Initialize scraper map

@@ -1026,6 +1026,187 @@ export const vnScraper = async (domain: string): Promise<WebScraperResult | null
   }
 };
 
+// AO - Angola (from original project WHOISWeb.php getAO())
+export const aoScraper = async (_domain: string): Promise<WebScraperResult | null> => {
+  try {
+    return { rawText: "Please visit https://www.dns.ao/ao/whois/" };
+  } catch {
+    return null;
+  }
+};
+
+// AZ - Azerbaijan (from original project getAZ())
+export const azScraper = async (_domain: string): Promise<WebScraperResult | null> => {
+  try {
+    return { rawText: "Please visit https://whois.az" };
+  } catch {
+    return null;
+  }
+};
+
+// BA - Bosnia and Herzegovina (from original project getBA())
+export const baScraper = async (_domain: string): Promise<WebScraperResult | null> => {
+  try {
+    return { rawText: "Please visit https://nic.ba/?culture=en" };
+  } catch {
+    return null;
+  }
+};
+
+// CY - Cyprus (from original project getCY())
+export const cyScraper = async (_domain: string): Promise<WebScraperResult | null> => {
+  try {
+    return { rawText: "Please visit https://registry.nic.cy/cy-ui/home" };
+  } catch {
+    return null;
+  }
+};
+
+// DJ - Djibouti (from original project getDJ())
+export const djScraper = async (_domain: string): Promise<WebScraperResult | null> => {
+  try {
+    return { rawText: "Please visit https://dot.dj" };
+  } catch {
+    return null;
+  }
+};
+
+// GQ - Equatorial Guinea (from original project getGQ())
+export const gqScraper = async (_domain: string): Promise<WebScraperResult | null> => {
+  try {
+    return { rawText: "Please visit http://www.dominio.gq/en/whois.html" };
+  } catch {
+    return null;
+  }
+};
+
+// PY - Paraguay (from original project getPY())
+export const pyScraper = async (_domain: string): Promise<WebScraperResult | null> => {
+  try {
+    return { rawText: "Please visit https://www.nic.py/consultdompy.php" };
+  } catch {
+    return null;
+  }
+};
+
+// GM - Gambia (from original project getGM())
+export const gmScraper = async (domain: string): Promise<WebScraperResult | null> => {
+  try {
+    const parts = domain.split(".");
+    const headUrl = `https://www.nic.gm/NIC2/scripts/checkdom.aspx?dname=${encodeURIComponent(parts[0])}`;
+    const headResponse = await fetchTimeout(headUrl, { method: "HEAD", redirect: "manual" });
+    const location = headResponse.headers.get("location") || "";
+
+    let whois = "";
+    if (location.includes("/NIC2/whois-available.html")) {
+      whois += `No match for "${domain}".\n`;
+    } else if (
+      location.includes("/NIC2/whois-reserved.html") ||
+      location.includes("/NIC2/whois-numbers.html")
+    ) {
+      whois += "This name is reserved by the registry.\n";
+    } else if (location.includes("/NIC2/whois-details.html")) {
+      const detailUrl = `https://www.nic.gm/NIC2/REG/login.aspx?whois=${encodeURIComponent(parts[0])}`;
+      const detailResponse = await fetchTimeout(detailUrl);
+      const body = await detailResponse.text();
+      const array = body.split(";");
+
+      whois += `Domain Name: ${domain}\n`;
+      whois += `Registrar: ${array[2] || ""}\n`;
+      whois += `Creation Date: ${array[11] || ""}\n`;
+      whois += `Registrant Name: ${array[1] || ""}\n`;
+      whois += `Admin Name: ${array[3] || ""}\n`;
+      whois += `Admin Organization: ${array[4] || ""}\n`;
+      whois += `Tech Name: ${array[5] || ""}\n`;
+      whois += `Tech Organization: ${array[6] || ""}\n`;
+      whois += `Name Server: ${array[7] || ""}\n`;
+      whois += `Name Server: ${array[8] || ""}\n`;
+      whois += `Name Server: ${array[9] || ""}\n`;
+      whois += `Name Server: ${array[10] || ""}\n`;
+    }
+
+    if (whois) {
+      const motdResponse = await fetchTimeout("https://www.nic.gm/NIC2/motd.txt");
+      const motd = await motdResponse.text();
+      if (motd) {
+        whois += `>>> Last update of whois database: ${motd.trim()} <<<`;
+      }
+    }
+
+    return whois.trim() ? { rawText: whois } : null;
+  } catch {
+    return null;
+  }
+};
+
+// LK - Sri Lanka (from original project getLK())
+export const lkScraper = async (domain: string): Promise<WebScraperResult | null> => {
+  try {
+    const url = `https://register.domains.lk/proxy/domains/single-search?keyword=${encodeURIComponent(domain)}`;
+    const response = await fetchTimeout(url);
+    if (!response.ok) return null;
+    const json: any = await response.json();
+
+    const availability = json?.result?.domainAvailability;
+    if (!availability) return null;
+
+    let message = availability.message || "";
+    if (message === "Domain name you searched is restricted") {
+      message = "Domain name is restricted";
+    }
+
+    let whois = `Message: ${message}\n`;
+    whois += `Domain Name: ${availability.domainName || ""}\n`;
+
+    const domainInfo = availability.domainInfo;
+    if (domainInfo) {
+      const expireDate = parseLKDate(domainInfo.expireDate || "");
+      whois += `Registry Expiry Date: ${expireDate}\n`;
+      whois += `Registrant Name: ${domainInfo.registeredTo || ""}\n`;
+    }
+
+    return { rawText: whois };
+  } catch {
+    return null;
+  }
+};
+
+// NR - Nauru (from original project getNR())
+export const nrScraper = async (domain: string): Promise<WebScraperResult | null> => {
+  try {
+    const parts = domain.split(".");
+    const params = new URLSearchParams({
+      subdomain: parts[0],
+      tld: parts[1] || "",
+      whois: "Submit",
+    });
+    const url = `https://www.cenpac.net.nr/dns/whois.html?${params.toString()}`;
+    const response = await fetchTimeout(url);
+    if (!response.ok) return null;
+    const html = await response.text();
+
+    // The WHOIS body sits after the query <form>; strip HTML to text.
+    const formEnd = html.toLowerCase().lastIndexOf("</form>");
+    const body = formEnd >= 0 ? html.slice(formEnd + 6) : html;
+    const text = htmlToWhoisText(body);
+    return text ? { rawText: text } : null;
+  } catch {
+    return null;
+  }
+};
+
+function parseLKDate(input: string): string {
+  const match = input.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s*,?\s*(\d{4})/);
+  if (!match) return "";
+  const months: Record<string, string> = {
+    january: "01", february: "02", march: "03", april: "04", may: "05", june: "06",
+    july: "07", august: "08", september: "09", october: "10", november: "11", december: "12",
+  };
+  const month = months[match[2].toLowerCase()];
+  if (!month) return "";
+  return `${match[3]}-${month}-${match[1].padStart(2, "0")}`;
+}
+
 // Generic web scraper for other TLDs
 export const genericScraper = async (tld: string, domain: string): Promise<WebScraperResult | null> => {
   // "com.hk" is a public suffix, but its registry lives under "hk".
