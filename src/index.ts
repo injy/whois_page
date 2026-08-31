@@ -56,7 +56,7 @@ export default {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
-    if (url.pathname === "/api/lookup") {
+    if (url.pathname === "/api/lookup" || url.pathname === "/api/") {
       return handleApiRequest(url);
     }
 
@@ -78,7 +78,7 @@ export async function tencentHandler(event: any, _context: any): Promise<any> {
     "http://localhost",
   );
 
-  if (url.pathname === "/api/lookup") {
+  if (url.pathname === "/api/lookup" || url.pathname === "/api/") {
     const resp = await handleApiRequest(url);
     return {
       statusCode: resp.status,
@@ -111,7 +111,7 @@ export async function tencentHandler(event: any, _context: any): Promise<any> {
 export async function aliyunHandler(request: any, context: any): Promise<any> {
   const url = new URL(request.url);
 
-  if (url.pathname === "/api/lookup") {
+  if (url.pathname === "/api/lookup" || url.pathname === "/api/") {
     return handleApiRequest(url);
   }
 
