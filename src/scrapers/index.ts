@@ -307,17 +307,29 @@ export const hkScraper = async (domain: string): Promise<WebScraperResult | null
 
 // GT - Guatemala registry. The HTML layout is parsed 1:1 from the original
 // PHP project WHOISWeb.php::getGT() inside src/scrapers/gt.ts.
+// The upstream registry is flaky, so retry the fetch a few times before
+// giving up (a single timeout/connection reset would otherwise fail the lookup).
 export const gtScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const url = `https://www.gt/sitio/whois.php?dn=${encodeURIComponent(domain)}&lang=en`;
-    const response = await fetchTimeout(url, {
+    const init: RequestInit = {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
-    });
-    if (!response.ok) return null;
-    const html = await response.text();
+    };
+
+    let html: string | null = null;
+    for (let attempt = 0; attempt < 3 && html === null; attempt++) {
+      try {
+        const response = await fetchTimeout(url, init);
+        if (response.ok) html = await response.text();
+      } catch {
+        // network error / timeout — try again
+      }
+    }
+    if (!html) return null;
+
     const rawText = parseGtHtml(html);
     return rawText ? { rawText } : null;
   } catch {
