@@ -1,0 +1,10 @@
+node_modules/
+.wrangler/
+dist/
+*.log
+.env
+.env.*
+!.env.example
+
+# Reference PHP project (not part of this repo)
+20260818/
