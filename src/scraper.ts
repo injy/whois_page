@@ -20,7 +20,6 @@ const webTlds = new Set(WEB_TLDS as string[]);
 
 // Register specific scrapers for known TLDs
 const specificScrapers: Record<string, (domain: string) => Promise<WebScraperResult | null>> = {
-  "cn": scrapers.cnScraper,
   "jp": scrapers.jpScraper,
   "uk": scrapers.ukScraper,
   "de": scrapers.deScraper,
