@@ -11,5 +11,5 @@ export const CONFIG = {
    *
    * Leave empty ("") to disable WHOIS lookups entirely.
    */
-  WHOIS_PROXY_POOL_URL: "https://v.nz/pages_whois_server.json",
+  WHOIS_PROXY_POOL_URL: "https://yangkexi.cn/json/pages_whois_server.json",
 } as const;
