@@ -4,6 +4,7 @@ import { parseRdap, type WhoisResult } from "./parser";
 import { fetchWhoisViaProxy } from "./whois";
 import { parseWhoisText } from "./whois-parser";
 import { fetchViaWebScraper, hasScraper } from "./scraper";
+import { CONFIG } from "./config";
 import RDAP_MAP from "./data/tld-rdap.json";
 import WHOIS_MAP from "./data/tld-whois.json";
 import WEB_TLDS from "./data/tld-web.json";
@@ -75,7 +76,8 @@ export async function lookup(
 
   // Priority 2: WHOIS via proxy pool
   const whoisHost = (WHOIS_MAP as Record<string, string>)[suffix];
-  const proxyPoolUrl = options?.proxyPoolUrl;
+  // Use URL param override > config default
+  const proxyPoolUrl = options?.proxyPoolUrl || CONFIG.WHOIS_PROXY_POOL_URL || undefined;
   if (whoisHost && proxyPoolUrl) {
     try {
       const whoisResponse = await fetchWhoisViaProxy(proxyPoolUrl, registrableDomain, suffix);

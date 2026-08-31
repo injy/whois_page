@@ -21,9 +21,6 @@ ${getCSS()}
 <div class="root">
   <header>
     <div class="header-actions">
-      <button class="settings-btn" id="settings-btn" aria-label="Settings">
-        <svg width="1em" height="1em" viewBox="0 -960 960 960" fill="currentColor"><path d="M480-160q-134 0-227-93t-93-227q0-134 93-227t227-93q69 0 132 28.5T720-690l44-44q11-11 28-11t28 11l84 84q11 11 11 28t-11 28l-44 44q14 29 21 60t7 64q0 134-93 227t-227 93Zm0-80q100 0 170-70t70-170q0-100-70-170t-170-70q-100 0-170 70t-70 170q0 100 70 170t170 70Zm0-240q33 0 56.5-23.5T560-560q0-33-23.5-56.5T480-640q-33 0-56.5 23.5T400-560q0 33 23.5 56.5T480-480Z"/></svg>
-      </button>
       <button class="theme-switcher" id="theme-switcher" aria-label="Switch theme">
         <svg width="1em" height="1em" viewBox="0 -960 960 960" fill="currentColor"><path d="M480-80q-82 0-155-31.5t-127.5-86Q143-252 111.5-325T80-480q0-83 32.5-156t88-127Q256-817 330-848.5T488-880q80 0 151 27.5t124.5 76q53.5 48.5 85 115T880-518q0 115-70 176.5T640-280h-74q-9 0-12.5 5t-3.5 11q0 12 15 34.5t15 51.5q0 50-27.5 74T480-80Zm0-400Zm-220 40q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120-160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm200 0q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17Zm120 160q26 0 43-17t17-43q0-26-17-43t-43-17q-26 0-43 17t-17 43q0 26 17 43t43 17ZM480-160q9 0 14.5-5t5.5-13q0-14-15-33t-15-57q0-42 29-67t71-25h70q66 0 113-38.5T800-518q0-121-92.5-201.5T488-800q-136 0-232 93t-96 227q0 133 93.5 226.5T480-160Z"/></svg>
       </button>
@@ -48,21 +45,6 @@ ${getCSS()}
 <button class="back-to-top" id="back-to-top" aria-label="Back to top">
   <svg width="1em" height="1em" viewBox="0 -960 960 960" fill="currentColor"><path d="M200-760q-17 0-28.5-11.5T160-800q0-17 11.5-28.5T200-840h560q17 0 28.5 11.5T800-800q0 17-11.5 28.5T760-760H200Zm280 640q-17 0-28.5-11.5T440-160v-368l-76 76q-11 11-28 11t-28-11q-11-11-11-28t11-28l144-144q6-6 13-8.5t15-2.5q8 0 15 2.5t13 8.5l144 144q11 11 11 28t-11 28q-11 11-28 11t-28-11l-76-76v368q0 17-11.5 28.5T480-120Z"/></svg>
 </button>
-<dialog id="settings-dialog">
-  <div class="dialog-head">
-    <h2 class="dialog-title">Settings</h2>
-    <button class="dialog-close" id="settings-close" aria-label="Close">&times;</button>
-  </div>
-  <div class="dialog-body">
-    <label for="proxy-pool-input" style="display:block;font-weight:600;margin-bottom:.5rem">WHOIS Proxy Pool URL</label>
-    <input id="proxy-pool-input" class="input" type="url" placeholder="https://api.example.com/whois/pool.json" style="width:100%">
-    <p style="color:var(--text-muted);font-size:.875rem;margin-top:.5rem">Enter the URL of your WHOIS proxy pool JSON. Saved locally in your browser.</p>
-    <div style="margin-top:1rem;display:flex;gap:.5rem">
-      <button class="primary-button" id="settings-save" type="button">Save</button>
-      <button class="chip" id="settings-clear" type="button">Clear</button>
-    </div>
-  </div>
-</dialog>
 <script>
 ${getJS()}
 </script>
@@ -83,9 +65,7 @@ body{background-color:var(--surface-page-end);color:var(--text-primary);font-fam
 body::before{background:linear-gradient(to bottom,var(--surface-page-start),var(--surface-page-end));bottom:0;content:"";left:0;position:fixed;right:0;top:0;z-index:-1}
 .safari-26-app-bar-color{background-color:var(--surface-page-start);height:16px;mask-image:linear-gradient(transparent,transparent);pointer-events:none;position:fixed;width:100%;z-index:99999;-webkit-mask-image:linear-gradient(transparent,transparent)}
 .root{display:flex;flex-direction:column;gap:1.5rem;margin:0 auto;max-width:67rem;padding:calc(1rem + env(safe-area-inset-top)) calc(1.5rem + env(safe-area-inset-right)) calc(3rem + env(safe-area-inset-bottom)) calc(1.5rem + env(safe-area-inset-left))}
-.header-actions{align-self:flex-end;display:flex;gap:.5rem}
-.settings-btn{border-radius:50%;color:var(--brand-primary);font-size:1.5rem;outline-offset:0;padding:.5rem}
-.settings-btn:hover{background-color:var(--surface-toggle-hover)}
+.header-actions{align-self:flex-end}
 .theme-switcher{border-radius:50%;color:var(--brand-primary);font-size:1.5rem;outline-offset:0;padding:.5rem}
 .theme-switcher:hover{background-color:var(--surface-toggle-hover)}
 h1{font-size:clamp(1.75rem,5vw,4rem);line-height:1;margin:0;text-wrap:balance}
@@ -169,17 +149,6 @@ function getJS(): string {
   var results=document.getElementById("results");
   var backToTop=document.getElementById("back-to-top");
   var themeSwitcher=document.getElementById("theme-switcher");
-
-  // Proxy pool URL from localStorage or URL param
-  var PROXY_POOL_KEY="whois_proxy_pool_url";
-  function getProxyPoolUrl(){
-    var urlParam=new URLSearchParams(location.search).get("proxy_pool");
-    if(urlParam)return urlParam;
-    return localStorage.getItem(PROXY_POOL_KEY)||"";
-  }
-  function setProxyPoolUrl(val){
-    localStorage.setItem(PROXY_POOL_KEY,val);
-  }
 
   // Theme toggle
   themeSwitcher.addEventListener("click",function(){
