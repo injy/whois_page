@@ -1,0 +1,27 @@
+[
+  {
+    "url": "https://v.nz/whois_for_pages.php",
+    "label": "rn WHOIS Proxy",
+    "weight": 1
+  },
+    {
+    "url": "https://yangkexi.cn/tools/whois_for_pages.php",
+    "label": "yangkexi.cn WHOIS Proxy",
+    "weight": 1
+  },
+  {
+    "url": "https://gc.vche.net/tools/whois_for_pages.php",
+    "label": "gc WHOIS Proxy",
+    "weight": 1
+  },
+  {
+    "url": "https://slim.vche.net/tools/whois_for_pages.php",
+    "label": "slim WHOIS Proxy",
+    "weight": 1
+  },
+  {
+    "url": "https://whois1.cdn.vche.net/tools/whois_for_pages.php",
+    "label": "cdn.vche.net WHOIS Proxy",
+    "weight": 0
+  }
+]
