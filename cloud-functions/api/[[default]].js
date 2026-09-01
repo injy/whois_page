@@ -24170,6 +24170,7 @@ function hasGoodResult(r) {
 
 // src/handler.ts
 async function handleApiRequest(url) {
+  console.log(`[whois] handleApiRequest v20260901 domain=${url.searchParams.get("domain") || ""} path=${url.pathname}`);
   const domain = url.searchParams.get("domain") || "";
   const proxyPoolUrl = url.searchParams.get("proxy_pool") || void 0;
   const options = {};
@@ -24178,6 +24179,7 @@ async function handleApiRequest(url) {
   }
   try {
     const result = await lookup(domain, options);
+    console.log(`[whois] handleApiRequest RESULT v20260901 code=${result.code} msg=${result.msg} domain=${domain}`);
     return new Response(JSON.stringify(result), {
       headers: {
         "content-type": "application/json;charset=UTF-8",

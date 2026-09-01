@@ -7,6 +7,7 @@ import { lookup, type LookupOptions } from "./api";
  * cloud functions (src/edgeone/*).
  */
 export async function handleApiRequest(url: URL): Promise<Response> {
+  console.log(`[whois] handleApiRequest v20260901 domain=${url.searchParams.get("domain") || ""} path=${url.pathname}`);
   const domain = url.searchParams.get("domain") || "";
   const proxyPoolUrl = url.searchParams.get("proxy_pool") || undefined;
 
@@ -17,6 +18,7 @@ export async function handleApiRequest(url: URL): Promise<Response> {
 
   try {
     const result = await lookup(domain, options);
+    console.log(`[whois] handleApiRequest RESULT v20260901 code=${result.code} msg=${result.msg} domain=${domain}`);
     return new Response(JSON.stringify(result), {
       headers: {
         "content-type": "application/json;charset=UTF-8",
