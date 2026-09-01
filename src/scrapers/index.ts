@@ -1,5 +1,6 @@
 import { parseHTML } from "linkedom";
 import { WebScraperResult } from "../scraper";
+import { createEmpty, finalizeWhoisResult } from "../parser";
 import { parseGtHtml } from "./gt";
 
 const FETCH_TIMEOUT_MS = 12000;
@@ -659,52 +660,108 @@ export const gwScraper = async (domain: string): Promise<WebScraperResult | null
   }
 };
 
-// HM - Heard Island and McDonald Islands (from original project getHM())
+// HM - Heard Island and McDonald Islands
+// .hm has no port-43 WHOIS; lookup is only available via the registry web form,
+// which requires a session cookie (PHPSESSID) obtained from the homepage first
+// and a Referer header on the POST (the site sits behind Cloudflare).
 export const hmScraper = async (domain: string): Promise<WebScraperResult | null> => {
+  const ua =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
   try {
-    // First get cookies
-    const homeUrl = "https://www.registry.hm";
-    const homeResponse = await fetchTimeout(homeUrl, {
-      method: "HEAD",
+    // 1) GET the homepage to obtain the session cookie.
+    const homeResponse = await fetchTimeout("https://www.registry.hm/", {
+      method: "GET",
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": ua,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
     });
-    const cookies = homeResponse.headers.get("set-cookie") || "";
-    console.log(`[whois:hm] HEAD ${homeResponse.status} setCookie=${cookies ? "yes" : "no"} domain=${domain}`);
+    // Collect every Set-Cookie (Node 18 exposes getSetCookie; fall back to the
+    // single-value header when it is unavailable).
+    const setCookies: string[] = [];
+    const rawSet = (homeResponse as unknown as { headers?: { getSetCookie?: () => string[] } }).headers?.getSetCookie?.();
+    if (Array.isArray(rawSet) && rawSet.length) setCookies.push(...rawSet);
+    else {
+      const single = homeResponse.headers.get("set-cookie");
+      if (single) setCookies.push(single);
+    }
+    const cookies = setCookies.map((c) => c.split(";")[0]).join("; ");
+    console.log(`[whois:hm] GET home ${homeResponse.status} cookies=${setCookies.length} domain=${domain}`);
 
-    // Submit query
+    // 2) POST the query with the session cookie + Referer.
     const url = "https://www.registry.hm/HR_whois2.php";
-    const formData = new URLSearchParams({
+    const body = new URLSearchParams({
       domain_name: domain,
       submit: "Check WHOIS record",
-    });
-
+    }).toString();
     const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Cookie": cookies,
+        "User-Agent": ua,
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        Referer: "https://www.registry.hm/",
+        Origin: "https://www.registry.hm",
+        Cookie: cookies,
       },
-      body: formData.toString(),
+      body,
     });
     console.log(`[whois:hm] POST ${response.status} type=${response.headers.get("content-type")} domain=${domain}`);
     if (!response.ok) {
-      return { rawText: "", error: `registry.hm POST ${url} -> HTTP ${response.status} ${response.statusText || ""}` };
+      return {
+        rawText: "",
+        error: `registry.hm POST ${url} -> HTTP ${response.status} ${response.statusText || ""}`,
+      };
     }
     const html = await response.text();
 
-    // Extract from <pre> tag
+    // 3) Extract the <pre> block.
     const match = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
     console.log(`[whois:hm] pre=${!!match} htmlLen=${html.length} domain=${domain}`);
-    if (match) {
-      return { rawText: match[1] };
+    if (!match) {
+      return {
+        rawText: htmlToWhoisText(html),
+        error: `registry.hm returned no <pre> block (htmlLen=${html.length})`,
+      };
     }
-    return { rawText: htmlToWhoisText(html), error: `registry.hm returned no <pre> block (htmlLen=${html.length})` };
+    const text = match[1];
+
+    // 4) Parse the .hm WHOIS text into a structured result. The .hm output uses
+    //    non-standard labels ("Domain name:", "Domain creation date:", ...) so we
+    //    extract them directly rather than relying on the generic text parser.
+    const field = (label: string): string => {
+      const m = text.match(new RegExp(`\\b${label}:\\s*([^\\r\\n]+)`, "i"));
+      return m ? m[1].trim() : "";
+    };
+    const parseHmDate = (s: string): string | null => {
+      const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+      if (!m) return null;
+      const dt = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
+      if (isNaN(dt.getTime())) return null;
+      return dt.toISOString().split("T")[0];
+    };
+
+    const result = createEmpty();
+    result.registered = true;
+    result.domain = (field("Domain name") || domain).toLowerCase();
+    result.registrar = field("Registrar");
+    result.nameServers = [
+      ...text.matchAll(/Name Server:\s*([^\r\n]+)/gi),
+    ].map((m) => m[1].trim().toLowerCase());
+    result.creationDate = field("Domain creation date");
+    result.creationDateISO8601 = parseHmDate(result.creationDate);
+    result.expirationDate = field("Domain expiration date");
+    result.expirationDateISO8601 = parseHmDate(result.expirationDate);
+    result.registryWHOISServer = "whois.registry.hm";
+    result.registryWebsite = "https://www.registry.hm/";
+
+    return { rawText: text, data: finalizeWhoisResult(result) };
   } catch (e) {
     console.error(`[whois:hm] error domain=${domain}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
-    return { rawText: "", error: `hmScraper exception: ${e instanceof Error ? e.message : String(e)}` };
+    return {
+      rawText: "",
+      error: `hmScraper exception: ${e instanceof Error ? e.message : String(e)}`,
+    };
   }
 };
 
