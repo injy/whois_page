@@ -152,8 +152,13 @@ export async function lookup(
   }
 
   // Priority 3: Web scraper
-  const webTlds = WEB_TLDS as string[];
-  if (webTlds.includes(suffix) || webTlds.includes(asciiSuffix)) {
+  // tld-web.json entries may be plain strings or objects carrying cookie config.
+  const webTldSet = new Set(
+    (WEB_TLDS as Array<string | { tld: string }>).map((e) =>
+      typeof e === "string" ? e : e.tld,
+    ),
+  );
+  if (webTldSet.has(suffix) || webTldSet.has(asciiSuffix)) {
     try {
       const scraperResult = await fetchViaWebScraper(registrableDomain, asciiSuffix);
       if (scraperResult) {
@@ -180,7 +185,7 @@ export async function lookup(
   const availableSources: string[] = [];
   if (rdapServer) availableSources.push("RDAP");
   if (hasWhoisServer(suffix) && proxyPoolUrl) availableSources.push("WHOIS");
-  if (webTlds.includes(suffix) || webTlds.includes(asciiSuffix)) availableSources.push("Web");
+  if (webTldSet.has(suffix) || webTldSet.has(asciiSuffix)) availableSources.push("Web");
 
   if (availableSources.length === 0) {
     return {

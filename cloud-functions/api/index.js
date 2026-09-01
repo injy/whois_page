@@ -24227,8 +24227,12 @@ async function lookup(rawDomain, options) {
     } catch {
     }
   }
-  const webTlds2 = tld_web_default;
-  if (webTlds2.includes(suffix) || webTlds2.includes(asciiSuffix)) {
+  const webTldSet = new Set(
+    tld_web_default.map(
+      (e) => typeof e === "string" ? e : e.tld
+    )
+  );
+  if (webTldSet.has(suffix) || webTldSet.has(asciiSuffix)) {
     try {
       const scraperResult = await fetchViaWebScraper(registrableDomain, asciiSuffix);
       if (scraperResult) {
@@ -24251,7 +24255,7 @@ async function lookup(rawDomain, options) {
     availableSources.push("RDAP");
   if (hasWhoisServer(suffix) && proxyPoolUrl)
     availableSources.push("WHOIS");
-  if (webTlds2.includes(suffix) || webTlds2.includes(asciiSuffix))
+  if (webTldSet.has(suffix) || webTldSet.has(asciiSuffix))
     availableSources.push("Web");
   if (availableSources.length === 0) {
     return {
