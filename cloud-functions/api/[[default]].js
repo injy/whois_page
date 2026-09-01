@@ -7,12 +7,15 @@ var __hasOwnProp = Object.prototype.hasOwnProperty;
 var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
   get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
 }) : x)(function(x) {
-  if (typeof require !== "undefined")
-    return require.apply(this, arguments);
-  throw new Error('Dynamic require of "' + x + '" is not supported');
+  if (typeof require !== "undefined") return require.apply(this, arguments);
+  throw Error('Dynamic require of "' + x + '" is not supported');
 });
 var __commonJS = (cb, mod) => function __require2() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 var __export = (target, all) => {
   for (var name in all)
@@ -144,6 +147,7 @@ var require_CSSStyleRule = __commonJS({
               }
             }
             break;
+          // String
           case '"':
             j = i + 1;
             index = ruleText.indexOf('"', j) + 1;
@@ -162,6 +166,7 @@ var require_CSSStyleRule = __commonJS({
             buffer += ruleText.slice(i, index);
             i = index - 1;
             break;
+          // Comment
           case "/":
             if (ruleText.charAt(i + 1) === "*") {
               i += 2;
@@ -983,6 +988,7 @@ var require_parse = __commonJS({
               buffer += character;
             }
             break;
+          // String
           case '"':
             index = i + 1;
             do {
@@ -1021,6 +1027,7 @@ var require_parse = __commonJS({
                 break;
             }
             break;
+          // Comment
           case "/":
             if (token.charAt(i + 1) === "*") {
               i += 2;
@@ -1038,6 +1045,7 @@ var require_parse = __commonJS({
               state = "importRule";
             }
             break;
+          // At-rule
           case "@":
             if (token.indexOf("@-moz-document", i) === i) {
               state = "documentRule-begin";
@@ -1198,8 +1206,7 @@ var require_parse = __commonJS({
           case ")":
             if (state === "value-parenthesis") {
               valueParenthesisDepth--;
-              if (valueParenthesisDepth === 0)
-                state = "value";
+              if (valueParenthesisDepth === 0) state = "value";
             }
             buffer += character;
             break;
@@ -1241,6 +1248,7 @@ var require_parse = __commonJS({
               case "value":
                 styleRule.style.setProperty(name, buffer.trim(), priority);
                 priority = "";
+              /* falls through */
               case "before-name":
               case "name":
                 styleRule.__ends = i + 1;
@@ -8528,27 +8536,23 @@ for (const rule of PSL_RULES) {
 function parseDomain(input) {
   const domain = input.toLowerCase().replace(/\.$/, "");
   const labels = domain.split(".");
-  if (labels.length < 2)
-    return null;
+  if (labels.length < 2) return null;
   for (let i = 0; i < labels.length - 1; i++) {
     const candidateSuffix = labels.slice(i).join(".");
     const parentOfCandidate = labels.slice(i + 1).join(".");
     if (exceptionSet.has(candidateSuffix)) {
       const suffix2 = parentOfCandidate;
-      if (i === 0)
-        return null;
+      if (i === 0) return null;
       const registrableDomain = labels.slice(i - 1).join(".");
       return { registrableDomain, suffix: suffix2 };
     }
     if (exactSet.has(candidateSuffix)) {
-      if (i === 0)
-        return null;
+      if (i === 0) return null;
       const registrableDomain = labels.slice(i - 1).join(".");
       return { registrableDomain, suffix: candidateSuffix };
     }
     if (wildcardParents.has(parentOfCandidate)) {
-      if (i === 0)
-        return null;
+      if (i === 0) return null;
       const registrableDomain = labels.slice(i - 1).join(".");
       return { registrableDomain, suffix: candidateSuffix };
     }
@@ -8571,8 +8575,7 @@ function parseDomain(input) {
 
 // src/idna.ts
 function toAscii(input) {
-  if (!input)
-    return input;
+  if (!input) return input;
   try {
     const url = new URL(`http://${input}`);
     return url.hostname || input;
@@ -9914,8 +9917,7 @@ function parseRdap(_extension, code, rawData) {
     return empty;
   }
   empty.registered = code !== 404;
-  if (!empty.registered)
-    return empty;
+  if (!empty.registered) return empty;
   empty.domain = getDomain(json);
   setLinks(json, _extension, empty);
   empty.registryWHOISServer = json.port43 || "";
@@ -9949,8 +9951,7 @@ function finalizeWhoisResult(result) {
   result.hold = hasAnyStatusText(result.status, HOLD_TEXTS);
   result.inactive = hasAnyStatusText(result.status, INACTIVE_TEXTS);
   result.unknown = isUnknown(result);
-  if (result.unknown)
-    result.registered = false;
+  if (result.unknown) result.registered = false;
   return result;
 }
 function createEmpty() {
@@ -9996,29 +9997,24 @@ function createEmpty() {
 function isReserved(json) {
   if (json.variants) {
     for (const variant of json.variants) {
-      if (variant.relations?.includes("RESTRICTED_REGISTRATION"))
-        return true;
+      if (variant.relations?.includes("RESTRICTED_REGISTRATION")) return true;
     }
   }
   if (Array.isArray(json.description)) {
     const keywords = ["has usage restrictions", "is not available"];
     for (const desc of json.description) {
-      if (keywords.some((kw) => new RegExp(kw, "i").test(desc)))
-        return true;
+      if (keywords.some((kw) => new RegExp(kw, "i").test(desc))) return true;
     }
   }
-  if (json.error === "Domain name is reserved or restricted")
-    return true;
+  if (json.error === "Domain name is reserved or restricted") return true;
   return false;
 }
 function getDomain(json) {
-  if (!json.ldhName)
-    return "";
+  if (!json.ldhName) return "";
   return json.ldhName.replace(/\.$/, "").toLowerCase();
 }
 function setLinks(json, extension, result) {
-  if (!json.links)
-    return;
+  if (!json.links) return;
   for (const link of json.links) {
     const href = link.href || "";
     const rel = link.rel || "";
@@ -10037,13 +10033,11 @@ function setLinks(json, extension, result) {
   }
 }
 function setRegistrarInfo(json, result) {
-  if (!json.entities)
-    return;
+  if (!json.entities) return;
   for (const entity of json.entities) {
     const roles = entity.roles || [];
     const isRegistrar = Array.isArray(roles) && roles.includes("registrar") || roles === "registrar";
-    if (!isRegistrar)
-      continue;
+    if (!isRegistrar) continue;
     if (entity.vcardArray?.[1]) {
       for (const vcard of entity.vcardArray[1]) {
         if ((vcard[0] === "fn" || vcard[0] === "org") && !result.registrar) {
@@ -10057,8 +10051,7 @@ function setRegistrarInfo(json, result) {
       for (const sub of entity.entities) {
         if (sub.roles?.includes("abuse") && sub.vcardArray?.[1]) {
           for (const vcard of sub.vcardArray[1]) {
-            if (vcard[0] === "fn")
-              result.registrar = vcard[3];
+            if (vcard[0] === "fn") result.registrar = vcard[3];
           }
           break;
         }
@@ -10090,18 +10083,15 @@ function setRegistrarInfo(json, result) {
   }
 }
 function formatURL(url) {
-  if (url && !/^https?:\/\//i.test(url))
-    return `http://${url}`;
+  if (url && !/^https?:\/\//i.test(url)) return `http://${url}`;
   return url || "";
 }
 function setDates(json, result) {
-  if (!json.events)
-    return;
+  if (!json.events) return;
   for (const event of json.events) {
     const action = (event.eventAction || "").toLowerCase();
     const date = event.eventDate;
-    if (!date)
-      continue;
+    if (!date) continue;
     if (action === "registration") {
       result.creationDate = date;
       result.creationDateISO8601 = toISO8601(date);
@@ -10115,23 +10105,19 @@ function setDates(json, result) {
   }
 }
 function toISO8601(dateStr) {
-  if (!dateStr || dateStr === "Z")
-    return null;
+  if (!dateStr || dateStr === "Z") return null;
   try {
     const d = new Date(dateStr);
-    if (isNaN(d.getTime()))
-      return null;
+    if (isNaN(d.getTime())) return null;
     const hasTime = /\d{2}:\d{2}/.test(dateStr);
-    if (hasTime)
-      return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+    if (hasTime) return d.toISOString().replace(/\.\d{3}Z$/, "Z");
     return d.toISOString().split("T")[0];
   } catch {
     return null;
   }
 }
 function getStatus(json) {
-  if (!json.status)
-    return [];
+  if (!json.status) return [];
   const seen = /* @__PURE__ */ new Set();
   const result = [];
   for (const s of json.status) {
@@ -10187,8 +10173,7 @@ function formatStatus(status) {
   }
 }
 function getNameServers(json) {
-  if (!json.nameservers)
-    return [];
+  if (!json.nameservers) return [];
   const seen = /* @__PURE__ */ new Set();
   const result = [];
   for (const ns of json.nameservers) {
@@ -10203,21 +10188,17 @@ function getNameServers(json) {
 function getDNSSECSigned(json) {
   if (json.secureDNS?.delegationSigned !== void 0) {
     const val = json.secureDNS.delegationSigned;
-    if (typeof val === "boolean")
-      return val;
-    if (typeof val === "string")
-      return val.toLowerCase() === "true";
+    if (typeof val === "boolean") return val;
+    if (typeof val === "string") return val.toLowerCase() === "true";
   }
   return null;
 }
 function dateDiffText(start, end) {
-  if (!start || !end)
-    return "";
+  if (!start || !end) return "";
   try {
     const startDate = start === "now" ? /* @__PURE__ */ new Date() : new Date(start);
     const endDate = end === "now" ? /* @__PURE__ */ new Date() : new Date(end);
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()))
-      return "";
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return "";
     const diffMs = endDate.getTime() - startDate.getTime();
     const invert = diffMs < 0;
     const absDiff = Math.abs(diffMs);
@@ -10226,25 +10207,20 @@ function dateDiffText(start, end) {
     const months = Math.floor(days % 365 / 30);
     const remainDays = days % 30;
     const parts = [];
-    if (years)
-      parts.push(`${years}Y`);
-    if (months)
-      parts.push(`${months}Mo`);
-    if (remainDays || !parts.length)
-      parts.push(`${remainDays}D`);
+    if (years) parts.push(`${years}Y`);
+    if (months) parts.push(`${months}Mo`);
+    if (remainDays || !parts.length) parts.push(`${remainDays}D`);
     return (invert ? "-" : "") + parts.join(" ");
   } catch {
     return "";
   }
 }
 function dateDiffSeconds(start, end) {
-  if (!start || !end)
-    return null;
+  if (!start || !end) return null;
   try {
     const startDate = start === "now" ? /* @__PURE__ */ new Date() : new Date(start);
     const endDate = end === "now" ? /* @__PURE__ */ new Date() : new Date(end);
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime()))
-      return null;
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return null;
     return Math.floor((endDate.getTime() - startDate.getTime()) / 1e3);
   } catch {
     return null;
@@ -11232,11 +11208,9 @@ var WHOIS_CUSTOM_QUERIES = {
 function findWhoisServer(tld) {
   const asciiTld = toAscii(tld);
   const custom = WHOIS_CUSTOM_QUERIES[asciiTld] ?? WHOIS_CUSTOM_QUERIES[tld];
-  if (custom)
-    return custom;
+  if (custom) return custom;
   const host = WHOIS_SERVERS[asciiTld] ?? WHOIS_SERVERS[tld];
-  if (host)
-    return { host, query: "%s\r\n" };
+  if (host) return { host, query: "%s\r\n" };
   return null;
 }
 function hasWhoisServer(tld) {
@@ -11247,17 +11221,13 @@ async function loadProxyPool(poolUrl) {
   const timeout = setTimeout(() => controller.abort(), 5e3);
   try {
     const resp = await fetch(poolUrl, { signal: controller.signal });
-    if (!resp.ok)
-      return [];
+    if (!resp.ok) return [];
     const json = await resp.json();
-    if (Array.isArray(json))
-      return json;
+    if (Array.isArray(json)) return json;
     if (json && typeof json === "object") {
       const obj = json;
-      if (Array.isArray(obj.servers))
-        return obj.servers;
-      if (Array.isArray(obj.proxies))
-        return obj.proxies;
+      if (Array.isArray(obj.servers)) return obj.servers;
+      if (Array.isArray(obj.proxies)) return obj.proxies;
     }
     return [];
   } catch {
@@ -11268,8 +11238,7 @@ async function loadProxyPool(poolUrl) {
 }
 async function fetchWhoisViaProxy(proxyConfig, domain, tld) {
   const serverInfo = findWhoisServer(tld);
-  if (!serverInfo)
-    return null;
+  if (!serverInfo) return null;
   let proxies = [];
   if (typeof proxyConfig === "string") {
     if (proxyConfig.startsWith("http")) {
@@ -11285,13 +11254,11 @@ async function fetchWhoisViaProxy(proxyConfig, domain, tld) {
   } else {
     proxies = proxyConfig;
   }
-  if (proxies.length === 0)
-    return null;
+  if (proxies.length === 0) return null;
   const shuffled = shuffleWithWeight(proxies);
   for (const proxy of shuffled) {
     const result = await trySingleProxy(proxy, domain, serverInfo);
-    if (result)
-      return result;
+    if (result) return result;
   }
   return null;
 }
@@ -11307,11 +11274,9 @@ async function trySingleProxy(proxy, domain, serverInfo) {
       signal: controller.signal,
       headers: { Accept: "text/plain" }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const rawText = await response.text();
-    if (!rawText.trim())
-      return null;
+    if (!rawText.trim()) return null;
     return {
       server: serverInfo.host,
       rawText,
@@ -11417,8 +11382,7 @@ var MONTH_NAMES = {
 };
 function pad(n, len) {
   let out = String(n);
-  while (out.length < len)
-    out = "0" + out;
+  while (out.length < len) out = "0" + out;
   return out;
 }
 function escapeRe(ch) {
@@ -11439,11 +11403,9 @@ function getOffsetMinutes(timeZone, at) {
     const parts = dtf.formatToParts(at);
     const map = {};
     for (const part of parts) {
-      if (part.type !== "literal")
-        map[part.type] = Number(part.value);
+      if (part.type !== "literal") map[part.type] = Number(part.value);
     }
-    if (!map.year || !map.month || !map.day)
-      return null;
+    if (!map.year || !map.month || !map.day) return null;
     const asUtc = Date.UTC(
       map.year,
       map.month - 1,
@@ -11459,13 +11421,10 @@ function getOffsetMinutes(timeZone, at) {
 }
 function zonedWallToUtcMs(wall, timeZone) {
   const wallAsUtc = Date.UTC(wall.y, wall.mo - 1, wall.d, wall.h, wall.mi, wall.s);
-  if (isNaN(wallAsUtc))
-    return null;
-  if (timeZone === "UTC")
-    return wallAsUtc;
+  if (isNaN(wallAsUtc)) return null;
+  if (timeZone === "UTC") return wallAsUtc;
   const first = getOffsetMinutes(timeZone, new Date(wallAsUtc));
-  if (first === null)
-    return wallAsUtc;
+  if (first === null) return wallAsUtc;
   let utc = wallAsUtc - first * 6e4;
   const second = getOffsetMinutes(timeZone, new Date(utc));
   if (second !== null && second !== first) {
@@ -11475,12 +11434,10 @@ function zonedWallToUtcMs(wall, timeZone) {
 }
 function wallToIso(wall, timeZone, hasTime) {
   const utcMs = zonedWallToUtcMs(wall, hasTime ? timeZone : "UTC");
-  if (utcMs === null)
-    return null;
+  if (utcMs === null) return null;
   const dt = new Date(utcMs);
   const date = `${pad(dt.getUTCFullYear(), 4)}-${pad(dt.getUTCMonth() + 1, 2)}-${pad(dt.getUTCDate(), 2)}`;
-  if (!hasTime)
-    return date;
+  if (!hasTime) return date;
   return `${date}T${pad(dt.getUTCHours(), 2)}:${pad(dt.getUTCMinutes(), 2)}:${pad(dt.getUTCSeconds(), 2)}Z`;
 }
 function parseWithFormat(input, format) {
@@ -11488,8 +11445,7 @@ function parseWithFormat(input, format) {
   const slots = [];
   const push2 = (re, slot) => {
     pattern += re;
-    if (slot)
-      slots.push(slot);
+    if (slot) slots.push(slot);
   };
   let i = 0;
   while (i < format.length) {
@@ -11572,28 +11528,23 @@ function parseWithFormat(input, format) {
   } catch {
     return null;
   }
-  if (!match)
-    return null;
+  if (!match) return null;
   const wall = { y: 0, mo: 1, d: 1, h: 0, mi: 0, s: 0 };
   let group = 1;
   for (const slot of slots) {
     const raw = match[group++];
-    if (raw === void 0)
-      return null;
+    if (raw === void 0) return null;
     if (slot === "monName") {
       const month = MONTH_NAMES[raw.toLowerCase()];
-      if (!month)
-        return null;
+      if (!month) return null;
       wall.mo = month;
     } else {
       const value = Number(raw);
-      if (!Number.isFinite(value))
-        return null;
+      if (!Number.isFinite(value)) return null;
       wall[slot] = value;
     }
   }
-  if (!wall.y || !wall.mo || !wall.d)
-    return null;
+  if (!wall.y || !wall.mo || !wall.d) return null;
   return wall;
 }
 var LOOSE_PATTERNS = [
@@ -11616,25 +11567,21 @@ var LOOSE_PATTERNS = [
 function parseLooseWall(input) {
   for (const { re, order } of LOOSE_PATTERNS) {
     const m = re.exec(input);
-    if (!m)
-      continue;
+    if (!m) continue;
     const wall = { y: 0, mo: 1, d: 1, h: 0, mi: 0, s: 0 };
     let ok = true;
     for (let i = 0; i < order.length; i++) {
       const raw = m[i + 1];
-      if (raw === void 0)
-        continue;
+      if (raw === void 0) continue;
       const value = order[i] === "mo" && /[A-Za-z]/.test(raw) ? MONTH_NAMES[raw.toLowerCase()] : Number(raw);
       if (!Number.isFinite(value) || !value) {
-        if (order[i] === "h" || order[i] === "mi" || order[i] === "s")
-          continue;
+        if (order[i] === "h" || order[i] === "mi" || order[i] === "s") continue;
         ok = false;
         break;
       }
       wall[order[i]] = value;
     }
-    if (ok && wall.y && wall.mo && wall.d)
-      return wall;
+    if (ok && wall.y && wall.mo && wall.d) return wall;
   }
   return null;
 }
@@ -11644,10 +11591,8 @@ function hasExplicitZone(input) {
 function legacyToIso(dateStr) {
   try {
     const d = new Date(dateStr);
-    if (isNaN(d.getTime()))
-      return null;
-    if (/\d{2}:\d{2}/.test(dateStr))
-      return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+    if (isNaN(d.getTime())) return null;
+    if (/\d{2}:\d{2}/.test(dateStr)) return d.toISOString().replace(/\.\d{3}Z$/, "Z");
     return d.toISOString().split("T")[0];
   } catch {
     return null;
@@ -11655,22 +11600,18 @@ function legacyToIso(dateStr) {
 }
 function parseRegistryDate(raw, extension) {
   const input = (raw ?? "").trim();
-  if (!input || input === "Z")
-    return null;
+  if (!input || input === "Z") return null;
   const hasTime = /\d{2}:\d{2}/.test(input);
   const config = extension ? getTldDateConfig(extension) : void 0;
   const timezone = config?.timezone ?? "UTC";
-  if (hasTime && hasExplicitZone(input))
-    return legacyToIso(input);
+  if (hasTime && hasExplicitZone(input)) return legacyToIso(input);
   if (config?.dateFormat) {
     const wall2 = parseWithFormat(input, config.dateFormat);
-    if (wall2)
-      return wallToIso(wall2, timezone, hasTime);
+    if (wall2) return wallToIso(wall2, timezone, hasTime);
     return null;
   }
   const wall = parseLooseWall(input);
-  if (wall)
-    return wallToIso(wall, hasTime ? timezone : "UTC", hasTime);
+  if (wall) return wallToIso(wall, hasTime ? timezone : "UTC", hasTime);
   return null;
 }
 
@@ -11826,8 +11767,7 @@ function allGroups(data, re) {
   let m;
   while ((m = g.exec(data)) !== null) {
     const v = m[1].trim();
-    if (v && !out.includes(v))
-      out.push(v);
+    if (v && !out.includes(v)) out.push(v);
   }
   return out;
 }
@@ -11835,8 +11775,7 @@ var STATUS_URL_RE = /^(.+)\s+(?:(https?:\/\/\S+)|\((https?:\/\/[^\s)]+)\))/i;
 function baseStatus(data, cfg) {
   return allGroups(data, pat("status", cfg)).map((text) => {
     const urlMatch = text.match(STATUS_URL_RE);
-    if (urlMatch)
-      return { text: urlMatch[1].trim(), url: urlMatch[2] || urlMatch[3] };
+    if (urlMatch) return { text: urlMatch[1].trim(), url: urlMatch[2] || urlMatch[3] };
     return { text, url: "" };
   });
 }
@@ -11848,13 +11787,11 @@ function extractNameServers(data, cfg) {
   }
   if (ns.mode === "tn") {
     const block = data.match(/dns servers(.+?)(?=\n\n)/is);
-    if (!block)
-      return [];
+    if (!block) return [];
     return allGroups(block[1], re).map((v) => v.split(/[\t ]+/)[0].toLowerCase());
   }
   const val = firstGroup(data, re);
-  if (!val)
-    return [];
+  if (!val) return [];
   const lines = val.split(ns.sep).map((s) => s.trim()).filter(Boolean);
   const unique = [...new Set(lines)];
   return unique.map((p) => p.split(ns.subSep ?? " ")[0].toLowerCase());
@@ -11862,12 +11799,10 @@ function extractNameServers(data, cfg) {
 function extractStatus(data, cfg) {
   const re = pat("status", cfg);
   const st = cfg?.status;
-  if (!st)
-    return baseStatus(data, cfg);
+  if (!st) return baseStatus(data, cfg);
   if (st.mode === "explode") {
     const val = firstGroup(data, re);
-    if (!val)
-      return [];
+    if (!val) return [];
     const lines = val.split(st.sep).map((s) => s.trim()).filter(Boolean);
     const unique = [...new Set(lines)];
     return unique.map((p) => ({
@@ -11897,14 +11832,12 @@ function extractStatus(data, cfg) {
   }
   if (st.mode === "lu") {
     const val = firstGroup(data, re);
-    if (!val)
-      return [];
+    if (!val) return [];
     const out = [];
     const m = val.match(/^(.+?)(?: \(.+\))?$/);
     if (m) {
       out.push({ text: m[1].trim(), url: "" });
-      if (m[2])
-        out.push({ text: m[2].trim(), url: "" });
+      if (m[2]) out.push({ text: m[2].trim(), url: "" });
     }
     return out;
   }
@@ -11912,8 +11845,7 @@ function extractStatus(data, cfg) {
 }
 function extractUpdatedDate(data, cfg) {
   const mode = cfg?.updatedDate;
-  if (mode === "none")
-    return "";
+  if (mode === "none") return "";
   if (mode === "last") {
     const all = allGroups(data, pat("updatedDate", cfg));
     return all.length ? all[all.length - 1] : "";
@@ -11926,8 +11858,7 @@ function extractUpdatedDate(data, cfg) {
   return firstGroup(data, pat("updatedDate", cfg));
 }
 function extractAvailableDate(data, cfg) {
-  if (cfg?.availableDate === "none")
-    return "";
+  if (cfg?.availableDate === "none") return "";
   return firstGroup(data, pat("availableDate", cfg));
 }
 function isUnregistered(data, cfg) {
@@ -11949,12 +11880,10 @@ function extractDnssec(data, cfg) {
   const m = data.match(pat("dnssec", cfg));
   if (m) {
     const value = m[1].trim();
-    if (value)
-      return DNSSEC_SIGNED_VALUES.includes(value.toLowerCase());
+    if (value) return DNSSEC_SIGNED_VALUES.includes(value.toLowerCase());
   }
   const extra = firstGroup(data, pat("dnssecExtra", cfg));
-  if (extra)
-    return !!extra.trim();
+  if (extra) return !!extra.trim();
   return null;
 }
 var DNSSEC_SIGNED_VALUES = [
@@ -11993,8 +11922,7 @@ var STATUS_MAP2 = {
 };
 var aliasToCanonical2 = {};
 for (const [canonical, { aliases: aliases2 }] of Object.entries(STATUS_MAP2)) {
-  for (const alias of aliases2)
-    aliasToCanonical2[alias] = canonical;
+  for (const alias of aliases2) aliasToCanonical2[alias] = canonical;
 }
 function parseWhoisText(data, extension) {
   const result = createEmpty2();
@@ -12024,8 +11952,7 @@ function parseWhoisText(data, extension) {
   }
   result.registrarURL = result.registrarURL || formatURL2(firstGroup(data, pat("registrarURL", cfg)));
   const ianaId = firstGroup(data, pat("registrarIANAId", cfg));
-  if (/^\d+$/.test(ianaId))
-    result.registrarIANAId = ianaId;
+  if (/^\d+$/.test(ianaId)) result.registrarIANAId = ianaId;
   result.registrarWHOISServer = firstGroup(data, pat("registrarWHOISServer", cfg));
   result.creationDate = firstGroup(data, pat("creationDate", cfg));
   result.creationDateISO8601 = parseRegistryDate(result.creationDate, extension);
@@ -12056,8 +11983,7 @@ function parseWhoisText(data, extension) {
   result.hold = hasAnyStatusText2(result.status, HOLD);
   result.inactive = hasAnyStatusText2(result.status, INACTIVE_T);
   result.unknown = isUnknown2(result);
-  if (result.unknown)
-    result.registered = false;
+  if (result.unknown) result.registered = false;
   return result;
 }
 function createEmpty2() {
@@ -12101,8 +12027,7 @@ function createEmpty2() {
   };
 }
 function formatURL2(url) {
-  if (url && !/^https?:\/\//i.test(url))
-    return `http://${url}`;
+  if (url && !/^https?:\/\//i.test(url)) return `http://${url}`;
   return url || "";
 }
 function formatStatus2(status) {
@@ -12118,13 +12043,11 @@ function formatStatus2(status) {
   }
 }
 function dateDiffText2(start, end) {
-  if (!start || !end)
-    return "";
+  if (!start || !end) return "";
   try {
     const s = start === "now" ? /* @__PURE__ */ new Date() : new Date(start);
     const e = end === "now" ? /* @__PURE__ */ new Date() : new Date(end);
-    if (isNaN(s.getTime()) || isNaN(e.getTime()))
-      return "";
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return "";
     const diffMs = e.getTime() - s.getTime();
     const invert = diffMs < 0;
     const absDiff = Math.abs(diffMs);
@@ -12133,25 +12056,20 @@ function dateDiffText2(start, end) {
     const months = Math.floor(days % 365 / 30);
     const remainDays = days % 30;
     const parts = [];
-    if (years)
-      parts.push(`${years}Y`);
-    if (months)
-      parts.push(`${months}Mo`);
-    if (remainDays || !parts.length)
-      parts.push(`${remainDays}D`);
+    if (years) parts.push(`${years}Y`);
+    if (months) parts.push(`${months}Mo`);
+    if (remainDays || !parts.length) parts.push(`${remainDays}D`);
     return (invert ? "-" : "") + parts.join(" ");
   } catch {
     return "";
   }
 }
 function dateDiffSeconds2(start, end) {
-  if (!start || !end)
-    return null;
+  if (!start || !end) return null;
   try {
     const s = start === "now" ? /* @__PURE__ */ new Date() : new Date(start);
     const e = end === "now" ? /* @__PURE__ */ new Date() : new Date(end);
-    if (isNaN(s.getTime()) || isNaN(e.getTime()))
-      return null;
+    if (isNaN(s.getTime()) || isNaN(e.getTime())) return null;
     return Math.floor((e.getTime() - s.getTime()) / 1e3);
   } catch {
     return null;
@@ -12263,28 +12181,28 @@ var tld_web_default = [
 ];
 
 // node_modules/linkedom/esm/shared/symbols.js
-var CHANGED = Symbol("changed");
-var CLASS_LIST = Symbol("classList");
-var CUSTOM_ELEMENTS = Symbol("CustomElements");
-var CONTENT = Symbol("content");
-var DATASET = Symbol("dataset");
-var DOCTYPE = Symbol("doctype");
-var DOM_PARSER = Symbol("DOMParser");
-var END = Symbol("end");
-var EVENT_TARGET = Symbol("EventTarget");
-var GLOBALS = Symbol("globals");
-var IMAGE = Symbol("image");
-var MIME = Symbol("mime");
-var MUTATION_OBSERVER = Symbol("MutationObserver");
-var NEXT = Symbol("next");
-var OWNER_ELEMENT = Symbol("ownerElement");
-var PREV = Symbol("prev");
-var PRIVATE = Symbol("private");
-var SHEET = Symbol("sheet");
-var START = Symbol("start");
-var STYLE = Symbol("style");
-var UPGRADE = Symbol("upgrade");
-var VALUE = Symbol("value");
+var CHANGED = /* @__PURE__ */ Symbol("changed");
+var CLASS_LIST = /* @__PURE__ */ Symbol("classList");
+var CUSTOM_ELEMENTS = /* @__PURE__ */ Symbol("CustomElements");
+var CONTENT = /* @__PURE__ */ Symbol("content");
+var DATASET = /* @__PURE__ */ Symbol("dataset");
+var DOCTYPE = /* @__PURE__ */ Symbol("doctype");
+var DOM_PARSER = /* @__PURE__ */ Symbol("DOMParser");
+var END = /* @__PURE__ */ Symbol("end");
+var EVENT_TARGET = /* @__PURE__ */ Symbol("EventTarget");
+var GLOBALS = /* @__PURE__ */ Symbol("globals");
+var IMAGE = /* @__PURE__ */ Symbol("image");
+var MIME = /* @__PURE__ */ Symbol("mime");
+var MUTATION_OBSERVER = /* @__PURE__ */ Symbol("MutationObserver");
+var NEXT = /* @__PURE__ */ Symbol("next");
+var OWNER_ELEMENT = /* @__PURE__ */ Symbol("ownerElement");
+var PREV = /* @__PURE__ */ Symbol("prev");
+var PRIVATE = /* @__PURE__ */ Symbol("private");
+var SHEET = /* @__PURE__ */ Symbol("sheet");
+var START = /* @__PURE__ */ Symbol("start");
+var STYLE = /* @__PURE__ */ Symbol("style");
+var UPGRADE = /* @__PURE__ */ Symbol("upgrade");
+var VALUE = /* @__PURE__ */ Symbol("value");
 
 // node_modules/htmlparser2/dist/esm/index.js
 var esm_exports3 = {};
@@ -12339,7 +12257,7 @@ var decodeMap = /* @__PURE__ */ new Map([
 ]);
 var fromCodePoint = (
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition, n/no-unsupported-features/es-builtins
-  (_a = String.fromCodePoint) !== null && _a !== void 0 ? _a : (codePoint) => {
+  (_a = String.fromCodePoint) !== null && _a !== void 0 ? _a : ((codePoint) => {
     let output = "";
     if (codePoint > 65535) {
       codePoint -= 65536;
@@ -12348,7 +12266,7 @@ var fromCodePoint = (
     }
     output += String.fromCharCode(codePoint);
     return output;
-  }
+  })
 );
 function replaceCodePoint(codePoint) {
   var _a3;
@@ -12722,6 +12640,7 @@ var EntityDecoder = class {
       case EntityDecoderState.NamedEntity: {
         return this.result !== 0 && (this.decodeMode !== DecodingMode.Attribute || this.result === this.treeIndex) ? this.emitNotTerminatedNamedEntity() : 0;
       }
+      // Otherwise, emit a numeric entity if we have one.
       case EntityDecoderState.NumericDecimal: {
         return this.emitNumericEntity(0, 2);
       }
@@ -14763,6 +14682,7 @@ var EntityDecoder2 = class {
       case EntityDecoderState2.NamedEntity: {
         return this.result !== 0 && (this.decodeMode !== DecodingMode2.Attribute || this.result === this.treeIndex) ? this.emitNotTerminatedNamedEntity() : 0;
       }
+      // Otherwise, emit a numeric entity if we have one.
       case EntityDecoderState2.NumericDecimal: {
         return this.emitNumericEntity(0, 2);
       }
@@ -15086,6 +15006,7 @@ function renderNode(node, options) {
   switch (node.type) {
     case Root:
       return render(node.children, options);
+    // @ts-expect-error We don't use `Doctype` yet
     case Doctype:
     case Directive:
       return renderDirective(node);
@@ -16662,7 +16583,7 @@ var escape2 = (es) => replace.call(es, ca, pe);
 
 // node_modules/linkedom/esm/interface/attr.js
 var QUOTE = /"/g;
-var Attr = class extends Node2 {
+var Attr = class _Attr extends Node2 {
   constructor(ownerDocument, name, value = "") {
     super(ownerDocument, name, ATTRIBUTE_NODE);
     this.ownerElement = null;
@@ -16684,7 +16605,7 @@ var Attr = class extends Node2 {
   }
   cloneNode() {
     const { ownerDocument, name, [VALUE]: value } = this;
-    return new Attr(ownerDocument, name, value);
+    return new _Attr(ownerDocument, name, value);
   }
   toString() {
     const { name, [VALUE]: value } = this;
@@ -16888,13 +16809,13 @@ var CharacterData = class extends Node2 {
 };
 
 // node_modules/linkedom/esm/interface/cdata-section.js
-var CDATASection = class extends CharacterData {
+var CDATASection = class _CDATASection extends CharacterData {
   constructor(ownerDocument, data = "") {
     super(ownerDocument, "#cdatasection", CDATA_SECTION_NODE, data);
   }
   cloneNode() {
     const { ownerDocument, [VALUE]: data } = this;
-    return new CDATASection(ownerDocument, data);
+    return new _CDATASection(ownerDocument, data);
   }
   toString() {
     return `<![CDATA[${this[VALUE]}]]>`;
@@ -16902,13 +16823,13 @@ var CDATASection = class extends CharacterData {
 };
 
 // node_modules/linkedom/esm/interface/comment.js
-var Comment3 = class extends CharacterData {
+var Comment3 = class _Comment extends CharacterData {
   constructor(ownerDocument, data = "") {
     super(ownerDocument, "#comment", COMMENT_NODE, data);
   }
   cloneNode() {
     const { ownerDocument, [VALUE]: data } = this;
-    return new Comment3(ownerDocument, data);
+    return new _Comment(ownerDocument, data);
   }
   toString() {
     return `<!--${this[VALUE]}-->`;
@@ -17133,224 +17054,227 @@ function parseSelector(subselects2, selector, selectorIndex) {
   if (selector.length === selectorIndex) {
     return selectorIndex;
   }
-  loop:
-    while (selectorIndex < selector.length) {
-      const firstChar = selector.charCodeAt(selectorIndex);
-      switch (firstChar) {
-        case CharCode.Space:
-        case CharCode.Tab:
-        case CharCode.NewLine:
-        case CharCode.FormFeed:
-        case CharCode.CarriageReturn: {
-          if (tokens.length === 0 || tokens[0].type !== SelectorType.Descendant) {
-            ensureNotTraversal();
-            tokens.push({ type: SelectorType.Descendant });
-          }
-          stripWhitespace(1);
-          break;
+  loop: while (selectorIndex < selector.length) {
+    const firstChar = selector.charCodeAt(selectorIndex);
+    switch (firstChar) {
+      // Whitespace
+      case CharCode.Space:
+      case CharCode.Tab:
+      case CharCode.NewLine:
+      case CharCode.FormFeed:
+      case CharCode.CarriageReturn: {
+        if (tokens.length === 0 || tokens[0].type !== SelectorType.Descendant) {
+          ensureNotTraversal();
+          tokens.push({ type: SelectorType.Descendant });
         }
-        case CharCode.GreaterThan: {
-          addTraversal(SelectorType.Child);
-          stripWhitespace(1);
-          break;
-        }
-        case CharCode.LessThan: {
-          addTraversal(SelectorType.Parent);
-          stripWhitespace(1);
-          break;
-        }
-        case CharCode.Tilde: {
-          addTraversal(SelectorType.Sibling);
-          stripWhitespace(1);
-          break;
-        }
-        case CharCode.Plus: {
-          addTraversal(SelectorType.Adjacent);
-          stripWhitespace(1);
-          break;
-        }
-        case CharCode.Period: {
-          addSpecialAttribute("class", AttributeAction.Element);
-          break;
-        }
-        case CharCode.Hash: {
-          addSpecialAttribute("id", AttributeAction.Equals);
-          break;
-        }
-        case CharCode.LeftSquareBracket: {
-          stripWhitespace(1);
-          let name;
-          let namespace = null;
-          if (selector.charCodeAt(selectorIndex) === CharCode.Pipe) {
+        stripWhitespace(1);
+        break;
+      }
+      // Traversals
+      case CharCode.GreaterThan: {
+        addTraversal(SelectorType.Child);
+        stripWhitespace(1);
+        break;
+      }
+      case CharCode.LessThan: {
+        addTraversal(SelectorType.Parent);
+        stripWhitespace(1);
+        break;
+      }
+      case CharCode.Tilde: {
+        addTraversal(SelectorType.Sibling);
+        stripWhitespace(1);
+        break;
+      }
+      case CharCode.Plus: {
+        addTraversal(SelectorType.Adjacent);
+        stripWhitespace(1);
+        break;
+      }
+      // Special attribute selectors: .class, #id
+      case CharCode.Period: {
+        addSpecialAttribute("class", AttributeAction.Element);
+        break;
+      }
+      case CharCode.Hash: {
+        addSpecialAttribute("id", AttributeAction.Equals);
+        break;
+      }
+      case CharCode.LeftSquareBracket: {
+        stripWhitespace(1);
+        let name;
+        let namespace = null;
+        if (selector.charCodeAt(selectorIndex) === CharCode.Pipe) {
+          name = getName4(1);
+        } else if (selector.startsWith("*|", selectorIndex)) {
+          namespace = "*";
+          name = getName4(2);
+        } else {
+          name = getName4(0);
+          if (selector.charCodeAt(selectorIndex) === CharCode.Pipe && selector.charCodeAt(selectorIndex + 1) !== CharCode.Equal) {
+            namespace = name;
             name = getName4(1);
-          } else if (selector.startsWith("*|", selectorIndex)) {
-            namespace = "*";
-            name = getName4(2);
-          } else {
-            name = getName4(0);
-            if (selector.charCodeAt(selectorIndex) === CharCode.Pipe && selector.charCodeAt(selectorIndex + 1) !== CharCode.Equal) {
-              namespace = name;
-              name = getName4(1);
+          }
+        }
+        stripWhitespace(0);
+        let action = AttributeAction.Exists;
+        const possibleAction = actionTypes.get(selector.charCodeAt(selectorIndex));
+        if (possibleAction) {
+          action = possibleAction;
+          if (selector.charCodeAt(selectorIndex + 1) !== CharCode.Equal) {
+            throw new Error("Expected `=`");
+          }
+          stripWhitespace(2);
+        } else if (selector.charCodeAt(selectorIndex) === CharCode.Equal) {
+          action = AttributeAction.Equals;
+          stripWhitespace(1);
+        }
+        let value = "";
+        let ignoreCase2 = null;
+        if (action !== "exists") {
+          if (isQuote(selector.charCodeAt(selectorIndex))) {
+            const quote = selector.charCodeAt(selectorIndex);
+            selectorIndex += 1;
+            const sectionStart = selectorIndex;
+            while (selectorIndex < selector.length && selector.charCodeAt(selectorIndex) !== quote) {
+              selectorIndex += // Skip next character if it is escaped
+              selector.charCodeAt(selectorIndex) === CharCode.BackSlash ? 2 : 1;
             }
+            if (selector.charCodeAt(selectorIndex) !== quote) {
+              throw new Error("Attribute value didn't end");
+            }
+            value = unescapeCSS(selector.slice(sectionStart, selectorIndex));
+            selectorIndex += 1;
+          } else {
+            const valueStart = selectorIndex;
+            while (selectorIndex < selector.length && !isWhitespace2(selector.charCodeAt(selectorIndex)) && selector.charCodeAt(selectorIndex) !== CharCode.RightSquareBracket) {
+              selectorIndex += // Skip next character if it is escaped
+              selector.charCodeAt(selectorIndex) === CharCode.BackSlash ? 2 : 1;
+            }
+            value = unescapeCSS(selector.slice(valueStart, selectorIndex));
           }
           stripWhitespace(0);
-          let action = AttributeAction.Exists;
-          const possibleAction = actionTypes.get(selector.charCodeAt(selectorIndex));
-          if (possibleAction) {
-            action = possibleAction;
-            if (selector.charCodeAt(selectorIndex + 1) !== CharCode.Equal) {
-              throw new Error("Expected `=`");
-            }
-            stripWhitespace(2);
-          } else if (selector.charCodeAt(selectorIndex) === CharCode.Equal) {
-            action = AttributeAction.Equals;
-            stripWhitespace(1);
-          }
-          let value = "";
-          let ignoreCase2 = null;
-          if (action !== "exists") {
-            if (isQuote(selector.charCodeAt(selectorIndex))) {
-              const quote = selector.charCodeAt(selectorIndex);
-              selectorIndex += 1;
-              const sectionStart = selectorIndex;
-              while (selectorIndex < selector.length && selector.charCodeAt(selectorIndex) !== quote) {
-                selectorIndex += // Skip next character if it is escaped
-                selector.charCodeAt(selectorIndex) === CharCode.BackSlash ? 2 : 1;
-              }
-              if (selector.charCodeAt(selectorIndex) !== quote) {
-                throw new Error("Attribute value didn't end");
-              }
-              value = unescapeCSS(selector.slice(sectionStart, selectorIndex));
-              selectorIndex += 1;
-            } else {
-              const valueStart = selectorIndex;
-              while (selectorIndex < selector.length && !isWhitespace2(selector.charCodeAt(selectorIndex)) && selector.charCodeAt(selectorIndex) !== CharCode.RightSquareBracket) {
-                selectorIndex += // Skip next character if it is escaped
-                selector.charCodeAt(selectorIndex) === CharCode.BackSlash ? 2 : 1;
-              }
-              value = unescapeCSS(selector.slice(valueStart, selectorIndex));
-            }
-            stripWhitespace(0);
-            switch (selector.charCodeAt(selectorIndex) | 32) {
-              case CharCode.LowerI: {
-                ignoreCase2 = true;
-                stripWhitespace(1);
-                break;
-              }
-              case CharCode.LowerS: {
-                ignoreCase2 = false;
-                stripWhitespace(1);
-                break;
-              }
-            }
-          }
-          if (selector.charCodeAt(selectorIndex) !== CharCode.RightSquareBracket) {
-            throw new Error("Attribute selector didn't terminate");
-          }
-          selectorIndex += 1;
-          const attributeSelector = {
-            type: SelectorType.Attribute,
-            name,
-            action,
-            value,
-            namespace,
-            ignoreCase: ignoreCase2
-          };
-          tokens.push(attributeSelector);
-          break;
-        }
-        case CharCode.Colon: {
-          if (selector.charCodeAt(selectorIndex + 1) === CharCode.Colon) {
-            tokens.push({
-              type: SelectorType.PseudoElement,
-              name: getName4(2).toLowerCase(),
-              data: selector.charCodeAt(selectorIndex) === CharCode.LeftParenthesis ? readValueWithParenthesis() : null
-            });
-            break;
-          }
-          const name = getName4(1).toLowerCase();
-          if (pseudosToPseudoElements.has(name)) {
-            tokens.push({
-              type: SelectorType.PseudoElement,
-              name,
-              data: null
-            });
-            break;
-          }
-          let data = null;
-          if (selector.charCodeAt(selectorIndex) === CharCode.LeftParenthesis) {
-            if (unpackPseudos.has(name)) {
-              if (isQuote(selector.charCodeAt(selectorIndex + 1))) {
-                throw new Error(`Pseudo-selector ${name} cannot be quoted`);
-              }
-              data = [];
-              selectorIndex = parseSelector(data, selector, selectorIndex + 1);
-              if (selector.charCodeAt(selectorIndex) !== CharCode.RightParenthesis) {
-                throw new Error(`Missing closing parenthesis in :${name} (${selector})`);
-              }
-              selectorIndex += 1;
-            } else {
-              data = readValueWithParenthesis();
-              if (stripQuotesFromPseudos.has(name)) {
-                const quot = data.charCodeAt(0);
-                if (quot === data.charCodeAt(data.length - 1) && isQuote(quot)) {
-                  data = data.slice(1, -1);
-                }
-              }
-              data = unescapeCSS(data);
-            }
-          }
-          tokens.push({ type: SelectorType.Pseudo, name, data });
-          break;
-        }
-        case CharCode.Comma: {
-          finalizeSubselector();
-          tokens = [];
-          stripWhitespace(1);
-          break;
-        }
-        default: {
-          if (selector.startsWith("/*", selectorIndex)) {
-            const endIndex = selector.indexOf("*/", selectorIndex + 2);
-            if (endIndex === -1) {
-              throw new Error("Comment was not terminated");
-            }
-            selectorIndex = endIndex + 2;
-            if (tokens.length === 0) {
-              stripWhitespace(0);
-            }
-            break;
-          }
-          let namespace = null;
-          let name;
-          if (firstChar === CharCode.Asterisk) {
-            selectorIndex += 1;
-            name = "*";
-          } else if (firstChar === CharCode.Pipe) {
-            name = "";
-            if (selector.charCodeAt(selectorIndex + 1) === CharCode.Pipe) {
-              addTraversal(SelectorType.ColumnCombinator);
-              stripWhitespace(2);
+          switch (selector.charCodeAt(selectorIndex) | 32) {
+            // If the forceIgnore flag is set (either `i` or `s`), use that value
+            case CharCode.LowerI: {
+              ignoreCase2 = true;
+              stripWhitespace(1);
               break;
             }
-          } else if (reName.test(selector.slice(selectorIndex))) {
-            name = getName4(0);
-          } else {
-            break loop;
-          }
-          if (selector.charCodeAt(selectorIndex) === CharCode.Pipe && selector.charCodeAt(selectorIndex + 1) !== CharCode.Pipe) {
-            namespace = name;
-            if (selector.charCodeAt(selectorIndex + 1) === CharCode.Asterisk) {
-              name = "*";
-              selectorIndex += 2;
-            } else {
-              name = getName4(1);
+            case CharCode.LowerS: {
+              ignoreCase2 = false;
+              stripWhitespace(1);
+              break;
             }
           }
-          tokens.push(name === "*" ? { type: SelectorType.Universal, namespace } : { type: SelectorType.Tag, name, namespace });
         }
+        if (selector.charCodeAt(selectorIndex) !== CharCode.RightSquareBracket) {
+          throw new Error("Attribute selector didn't terminate");
+        }
+        selectorIndex += 1;
+        const attributeSelector = {
+          type: SelectorType.Attribute,
+          name,
+          action,
+          value,
+          namespace,
+          ignoreCase: ignoreCase2
+        };
+        tokens.push(attributeSelector);
+        break;
+      }
+      case CharCode.Colon: {
+        if (selector.charCodeAt(selectorIndex + 1) === CharCode.Colon) {
+          tokens.push({
+            type: SelectorType.PseudoElement,
+            name: getName4(2).toLowerCase(),
+            data: selector.charCodeAt(selectorIndex) === CharCode.LeftParenthesis ? readValueWithParenthesis() : null
+          });
+          break;
+        }
+        const name = getName4(1).toLowerCase();
+        if (pseudosToPseudoElements.has(name)) {
+          tokens.push({
+            type: SelectorType.PseudoElement,
+            name,
+            data: null
+          });
+          break;
+        }
+        let data = null;
+        if (selector.charCodeAt(selectorIndex) === CharCode.LeftParenthesis) {
+          if (unpackPseudos.has(name)) {
+            if (isQuote(selector.charCodeAt(selectorIndex + 1))) {
+              throw new Error(`Pseudo-selector ${name} cannot be quoted`);
+            }
+            data = [];
+            selectorIndex = parseSelector(data, selector, selectorIndex + 1);
+            if (selector.charCodeAt(selectorIndex) !== CharCode.RightParenthesis) {
+              throw new Error(`Missing closing parenthesis in :${name} (${selector})`);
+            }
+            selectorIndex += 1;
+          } else {
+            data = readValueWithParenthesis();
+            if (stripQuotesFromPseudos.has(name)) {
+              const quot = data.charCodeAt(0);
+              if (quot === data.charCodeAt(data.length - 1) && isQuote(quot)) {
+                data = data.slice(1, -1);
+              }
+            }
+            data = unescapeCSS(data);
+          }
+        }
+        tokens.push({ type: SelectorType.Pseudo, name, data });
+        break;
+      }
+      case CharCode.Comma: {
+        finalizeSubselector();
+        tokens = [];
+        stripWhitespace(1);
+        break;
+      }
+      default: {
+        if (selector.startsWith("/*", selectorIndex)) {
+          const endIndex = selector.indexOf("*/", selectorIndex + 2);
+          if (endIndex === -1) {
+            throw new Error("Comment was not terminated");
+          }
+          selectorIndex = endIndex + 2;
+          if (tokens.length === 0) {
+            stripWhitespace(0);
+          }
+          break;
+        }
+        let namespace = null;
+        let name;
+        if (firstChar === CharCode.Asterisk) {
+          selectorIndex += 1;
+          name = "*";
+        } else if (firstChar === CharCode.Pipe) {
+          name = "";
+          if (selector.charCodeAt(selectorIndex + 1) === CharCode.Pipe) {
+            addTraversal(SelectorType.ColumnCombinator);
+            stripWhitespace(2);
+            break;
+          }
+        } else if (reName.test(selector.slice(selectorIndex))) {
+          name = getName4(0);
+        } else {
+          break loop;
+        }
+        if (selector.charCodeAt(selectorIndex) === CharCode.Pipe && selector.charCodeAt(selectorIndex + 1) !== CharCode.Pipe) {
+          namespace = name;
+          if (selector.charCodeAt(selectorIndex + 1) === CharCode.Asterisk) {
+            name = "*";
+            selectorIndex += 2;
+          } else {
+            name = getName4(1);
+          }
+        }
+        tokens.push(name === "*" ? { type: SelectorType.Universal, namespace } : { type: SelectorType.Tag, name, namespace });
       }
     }
+  }
   finalizeSubselector();
   return selectorIndex;
 }
@@ -18940,6 +18864,7 @@ function compileGeneralSelector(next, selector, options, context, compileToken2,
     case SelectorType.Pseudo: {
       return compilePseudoSelector(next, selector, options, context, compileToken2);
     }
+    // Tags
     case SelectorType.Tag: {
       if (selector.namespace != null) {
         throw new Error("Namespaced tag names are not yet supported by css-select");
@@ -18952,6 +18877,7 @@ function compileGeneralSelector(next, selector, options, context, compileToken2,
         return adapter2.getName(element) === name && next(element);
       };
     }
+    // Traversal
     case SelectorType.Descendant: {
       if (!hasExpensiveSubselector || cacheResults === false || typeof WeakMap === "undefined") {
         return function descendant(element) {
@@ -19090,34 +19016,33 @@ function compileToken(token, options, compilationContext) {
   }
   let shouldTestNextSiblings = false;
   let query2 = falseFunc;
-  combineLoop:
-    for (const rules of token) {
-      if (rules.length >= 2) {
-        const [first, second] = rules;
-        if (first.type !== SelectorType.Pseudo || first.name !== "scope") {
-        } else if (isArrayContext && second.type === SelectorType.Descendant) {
-          rules[1] = FLEXIBLE_DESCENDANT_TOKEN;
-        } else if (second.type === SelectorType.Adjacent || second.type === SelectorType.Sibling) {
-          shouldTestNextSiblings = true;
-        }
+  combineLoop: for (const rules of token) {
+    if (rules.length >= 2) {
+      const [first, second] = rules;
+      if (first.type !== SelectorType.Pseudo || first.name !== "scope") {
+      } else if (isArrayContext && second.type === SelectorType.Descendant) {
+        rules[1] = FLEXIBLE_DESCENDANT_TOKEN;
+      } else if (second.type === SelectorType.Adjacent || second.type === SelectorType.Sibling) {
+        shouldTestNextSiblings = true;
       }
-      let next = rootFunction;
-      let hasExpensiveSubselector = false;
-      for (const rule of rules) {
-        next = compileGeneralSelector(next, rule, options, finalContext, compileToken, hasExpensiveSubselector);
-        const quality = getQuality(rule);
-        if (quality === 0) {
-          hasExpensiveSubselector = true;
-        }
-        if (next === falseFunc) {
-          continue combineLoop;
-        }
-      }
-      if (next === rootFunction) {
-        return rootFunction;
-      }
-      query2 = query2 === falseFunc ? next : or(query2, next);
     }
+    let next = rootFunction;
+    let hasExpensiveSubselector = false;
+    for (const rule of rules) {
+      next = compileGeneralSelector(next, rule, options, finalContext, compileToken, hasExpensiveSubselector);
+      const quality = getQuality(rule);
+      if (quality === 0) {
+        hasExpensiveSubselector = true;
+      }
+      if (next === falseFunc) {
+        continue combineLoop;
+      }
+    }
+    if (next === rootFunction) {
+      return rootFunction;
+    }
+    query2 = query2 === falseFunc ? next : or(query2, next);
+  }
   query2.shouldTestNextSiblings = shouldTestNextSiblings;
   return query2;
 }
@@ -19271,7 +19196,7 @@ var matches = (element, selectors) => is2(
 );
 
 // node_modules/linkedom/esm/interface/text.js
-var Text4 = class extends CharacterData {
+var Text4 = class _Text extends CharacterData {
   constructor(ownerDocument, data = "") {
     super(ownerDocument, "#text", TEXT_NODE, data);
   }
@@ -19297,7 +19222,7 @@ var Text4 = class extends CharacterData {
   }
   cloneNode() {
     const { ownerDocument, [VALUE]: data } = this;
-    return new Text4(ownerDocument, data);
+    return new _Text(ownerDocument, data);
   }
   toString() {
     return escape2(this[VALUE]);
@@ -19490,6 +19415,8 @@ var ParentNode = class extends Node2 {
       case COMMENT_NODE:
       case CDATA_SECTION_NODE:
         node.remove();
+      /* eslint no-fallthrough:0 */
+      // this covers DOCUMENT_TYPE_NODE too
       default:
         node.parentNode = this;
         knownSiblings(next[PREV], node, next);
@@ -19567,7 +19494,7 @@ var DocumentFragment = class extends NonElementParentNode {
 };
 
 // node_modules/linkedom/esm/interface/document-type.js
-var DocumentType = class extends Node2 {
+var DocumentType = class _DocumentType extends Node2 {
   constructor(ownerDocument, name, publicId = "", systemId = "") {
     super(ownerDocument, "#document-type", DOCUMENT_TYPE_NODE);
     this.name = name;
@@ -19576,7 +19503,7 @@ var DocumentType = class extends Node2 {
   }
   cloneNode() {
     const { ownerDocument, name, publicId, systemId } = this;
-    return new DocumentType(ownerDocument, name, publicId, systemId);
+    return new _DocumentType(ownerDocument, name, publicId, systemId);
   }
   toString() {
     const { name, publicId, systemId } = this;
@@ -22284,7 +22211,7 @@ var deleteContents = ({ [START]: start, [END]: end }, fragment = null) => {
     start = next;
   } while (start !== end);
 };
-var Range = class {
+var Range = class _Range {
   constructor() {
     this[START] = null;
     this[END] = null;
@@ -22366,7 +22293,7 @@ var Range = class {
     return content;
   }
   cloneRange() {
-    const range = new Range();
+    const range = new _Range();
     range[START] = this[START];
     range[END] = this[END];
     return range;
@@ -22477,10 +22404,12 @@ var Document2 = class extends NonElementParentNode {
               return this[EVENT_TARGET][name];
             case "document":
               return this;
+            /* c8 ignore start */
             case "navigator":
               return {
                 userAgent: "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/88.0.4324.150 Safari/537.36"
               };
+            /* c8 ignore stop */
             case "window":
               return window.get(this);
             case "customElements":
@@ -22760,7 +22689,7 @@ var XMLDocument = class extends Document2 {
 };
 
 // node_modules/linkedom/esm/dom/parser.js
-var DOMParser = class {
+var DOMParser = class _DOMParser {
   /** @typedef {{ "text/html": HTMLDocument, "image/svg+xml": SVGDocument, "text/xml": XMLDocument }} MimeToDoc */
   /**
    * @template {keyof MimeToDoc} MIME
@@ -22777,7 +22706,7 @@ var DOMParser = class {
       document = new SVGDocument();
     else
       document = new XMLDocument();
-    document[DOM_PARSER] = DOMParser;
+    document[DOM_PARSER] = _DOMParser;
     if (globals)
       document[GLOBALS] = globals;
     if (isHTML && markupLanguage === "...")
@@ -22816,8 +22745,7 @@ function parseGtHtml(html) {
     return msg ? { rawText: msg } : null;
   }
   const boxes = Array.from(doc.querySelectorAll("div.caja.caja-whois"));
-  if (boxes.length !== 2)
-    return null;
+  if (boxes.length !== 2) return null;
   const lines = [];
   const data = createEmpty();
   data.registered = true;
@@ -22825,8 +22753,7 @@ function parseGtHtml(html) {
   let captureOrg = false;
   const nameServers = [];
   for (const child of Array.from(boxes[0].childNodes)) {
-    if (child.nodeType !== 1)
-      continue;
+    if (child.nodeType !== 1) continue;
     const cls = (child.getAttribute?.("class") ?? "").trim();
     if (cls === "alert alert-success") {
       const h3 = child.querySelector("h3");
@@ -22849,8 +22776,7 @@ function parseGtHtml(html) {
       const title = clean(child.textContent ?? "");
       lines.push("");
       lines.push(title + ":");
-      if (title === "Entitled Organization")
-        captureOrg = true;
+      if (title === "Entitled Organization") captureOrg = true;
     } else if (cls === "form-stack") {
       const strong = child.querySelector("strong");
       if (strong) {
@@ -22862,8 +22788,7 @@ function parseGtHtml(html) {
       } else {
         for (const field of Array.from(child.querySelectorAll("div.form-field"))) {
           lines.push("  " + clean(field.textContent ?? ""));
-          if (captureOrg && !orgName)
-            orgName = clean(field.textContent ?? "");
+          if (captureOrg && !orgName) orgName = clean(field.textContent ?? "");
         }
         captureOrg = false;
       }
@@ -22871,14 +22796,12 @@ function parseGtHtml(html) {
       for (const li of Array.from(child.querySelectorAll("li"))) {
         const v = clean(li.textContent ?? "");
         lines.push("  " + v);
-        if (v)
-          nameServers.push(v);
+        if (v) nameServers.push(v);
       }
     }
   }
   for (const child of Array.from(boxes[1].childNodes)) {
-    if (child.nodeType !== 1)
-      continue;
+    if (child.nodeType !== 1) continue;
     const h4 = child.querySelector("h4");
     if (h4) {
       lines.push("");
@@ -22888,10 +22811,8 @@ function parseGtHtml(html) {
       lines.push("  " + clean(field.textContent ?? ""));
     }
   }
-  if (orgName)
-    data.registrar = orgName;
-  if (nameServers.length)
-    data.nameServers = nameServers;
+  if (orgName) data.registrar = orgName;
+  if (nameServers.length) data.nameServers = nameServers;
   const rawText = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
   return { rawText, data: finalizeWhoisResult(data) };
 }
@@ -22944,11 +22865,9 @@ function nodeToText(node, out) {
     out.push(String(node.textContent ?? "").replace(new RegExp(NBSP2, "g"), " "));
     return;
   }
-  if (node.nodeType !== 1)
-    return;
+  if (node.nodeType !== 1) return;
   const tag = String(node.tagName || "").toLowerCase();
-  if (SKIP_TAGS.has(tag))
-    return;
+  if (SKIP_TAGS.has(tag)) return;
   if (tag === "table") {
     for (const tr of Array.from(node.querySelectorAll("tr"))) {
       const cells = Array.from(tr.querySelectorAll("td, th")).map((c) => normalizeWs(String(c.textContent ?? ""))).filter(Boolean);
@@ -22967,15 +22886,13 @@ function nodeToText(node, out) {
   for (const child of Array.from(node.childNodes)) {
     nodeToText(child, out);
   }
-  if (BLOCK_TAGS.has(tag))
-    out.push("\n");
+  if (BLOCK_TAGS.has(tag)) out.push("\n");
 }
 function htmlToWhoisText(html) {
   const doc = parseHtml(html);
   const root = doc.body || doc.documentElement;
   const parts = [];
-  if (root)
-    nodeToText(root, parts);
+  if (root) nodeToText(root, parts);
   return parts.join("").split("\n").map((line) => line.replace(/[ \t]+/g, " ").trim()).filter((line) => line.length > 0).join("\n").trim();
 }
 var jpScraper = async (domain) => {
@@ -22987,8 +22904,7 @@ var jpScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     const match = html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/i);
     if (match) {
@@ -23008,8 +22924,7 @@ var ukScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     const match = html.match(/<div[^>]*class="[^"]*whois[^"]*"[^>]*>([\s\S]*?)<\/div>/i);
     if (match) {
@@ -23029,8 +22944,7 @@ var deScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23046,8 +22960,7 @@ var frScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23063,8 +22976,7 @@ var itScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23080,8 +22992,7 @@ var brScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23097,8 +23008,7 @@ var ruScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23114,8 +23024,7 @@ var krScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23131,8 +23040,7 @@ var twScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23148,8 +23056,7 @@ var hkScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23169,13 +23076,11 @@ var gtScraper = async (domain) => {
     for (let attempt = 0; attempt < 3 && html === null; attempt++) {
       try {
         const response = await fetchTimeout(url, init);
-        if (response.ok)
-          html = await response.text();
+        if (response.ok) html = await response.text();
       } catch {
       }
     }
-    if (!html)
-      return null;
+    if (!html) return null;
     const parsed = parseGtHtml(html);
     return parsed ? { rawText: parsed.rawText, data: parsed.data } : null;
   } catch {
@@ -23191,8 +23096,7 @@ var bbScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     const match = html.match(/<table[^>]*>([\s\S]*?)<\/table>([\s\S]*?)(?=<p|$)/i);
     if (match && match[2]) {
@@ -23220,8 +23124,7 @@ var boScraper = async (domain) => {
       },
       body: formData.toString()
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23241,8 +23144,7 @@ var btScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23261,8 +23163,7 @@ var cuScraper = async (domain) => {
       },
       body: formData.toString()
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23277,8 +23178,7 @@ var dzScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const jsonText = await response.text();
     const json = JSON.parse(jsonText);
     let whois = `Domain Name: ${json.domainName || ""}
@@ -23336,8 +23236,7 @@ var gfScraper = async (domain) => {
       },
       body: formData.toString()
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23352,12 +23251,10 @@ var grScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!getResponse.ok)
-      return null;
+    if (!getResponse.ok) return null;
     const getHtml = await getResponse.text();
     const csrfMatch = getHtml.match(/name="_csrf"[^>]*value="([^"]+)"/i);
-    if (!csrfMatch)
-      return null;
+    if (!csrfMatch) return null;
     const csrf = csrfMatch[1];
     const cookies = getResponse.headers.get("set-cookie") || "";
     const postUrl = "https://grweb.ics.forth.gr/public/whois/query";
@@ -23375,8 +23272,7 @@ var grScraper = async (domain) => {
       },
       body: formData.toString()
     });
-    if (!postResponse.ok)
-      return null;
+    if (!postResponse.ok) return null;
     const postHtml = await postResponse.text();
     return { rawText: postHtml };
   } catch {
@@ -23399,8 +23295,7 @@ var gwScraper = async (domain) => {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
         }
       });
-      if (!response2.ok)
-        return null;
+      if (!response2.ok) return null;
       const html2 = await response2.text();
       if (html2.includes("Domain not found") || response2.status === 404) {
         return { rawText: "Domain not found" };
@@ -23494,8 +23389,7 @@ var hmScraper = async (domain) => {
       body: formData.toString()
     });
     console.log(`[whois:hm] POST ${response.status} type=${response.headers.get("content-type")} domain=${domain}`);
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     const match = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
     console.log(`[whois:hm] pre=${!!match} htmlLen=${html.length} domain=${domain}`);
@@ -23517,8 +23411,7 @@ var huScraper = async (domain) => {
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23533,8 +23426,7 @@ var joScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!getResponse.ok)
-      return null;
+    if (!getResponse.ok) return null;
     const cookies = getResponse.headers.get("set-cookie") || "";
     const html = await getResponse.text();
     return { rawText: htmlToWhoisText(html) };
@@ -23550,8 +23442,7 @@ var mtScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     const match = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
     if (match) {
@@ -23570,8 +23461,7 @@ var niScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const jsonText = await response.text();
     const json = JSON.parse(jsonText);
     let whois = `Domain Name: ${domain}
@@ -23606,12 +23496,10 @@ var npScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!getResponse.ok)
-      return null;
+    if (!getResponse.ok) return null;
     const getHtml = await getResponse.text();
     const tokenMatch = getHtml.match(/name="_token"[^>]*value="([^"]+)"/i);
-    if (!tokenMatch)
-      return null;
+    if (!tokenMatch) return null;
     const token = tokenMatch[1];
     const cookies = getResponse.headers.get("set-cookie") || "";
     const postUrl = "https://register.com.np/checkdomain_whois";
@@ -23629,8 +23517,7 @@ var npScraper = async (domain) => {
       },
       body: formData.toString()
     });
-    if (!postResponse.ok)
-      return null;
+    if (!postResponse.ok) return null;
     const postHtml = await postResponse.text();
     return { rawText: postHtml };
   } catch {
@@ -23645,8 +23532,7 @@ var paScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const jsonText = await response.text();
     const json = JSON.parse(jsonText);
     let whois = "";
@@ -23681,8 +23567,7 @@ var phScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     const match = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
     if (match) {
@@ -23709,8 +23594,7 @@ var svScraper = async (domain) => {
       },
       body: formData.toString()
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23726,8 +23610,7 @@ var tjScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23749,8 +23632,7 @@ var ttScraper = async (domain) => {
       },
       body: formData.toString()
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     return { rawText: htmlToWhoisText(html) };
   } catch {
@@ -23775,8 +23657,7 @@ var vnScraper = async (domain) => {
         "Cookie": cookies
       }
     });
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const jsonText = await response.text();
     const json = JSON.parse(jsonText);
     let whois = "";
@@ -23928,12 +23809,10 @@ var lkScraper = async (domain) => {
   try {
     const url = `https://register.domains.lk/proxy/domains/single-search?keyword=${encodeURIComponent(domain)}`;
     const response = await fetchTimeout(url);
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const json = await response.json();
     const availability = json?.result?.domainAvailability;
-    if (!availability)
-      return null;
+    if (!availability) return null;
     let message = availability.message || "";
     if (message === "Domain name you searched is restricted") {
       message = "Domain name is restricted";
@@ -23965,8 +23844,7 @@ var nrScraper = async (domain) => {
     });
     const url = `https://www.cenpac.net.nr/dns/whois.html?${params.toString()}`;
     const response = await fetchTimeout(url);
-    if (!response.ok)
-      return null;
+    if (!response.ok) return null;
     const html = await response.text();
     const formEnd = html.toLowerCase().lastIndexOf("</form>");
     const body = formEnd >= 0 ? html.slice(formEnd + 6) : html;
@@ -23978,8 +23856,7 @@ var nrScraper = async (domain) => {
 };
 function parseLKDate(input) {
   const match = input.match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)\s*,?\s*(\d{4})/);
-  if (!match)
-    return "";
+  if (!match) return "";
   const months = {
     january: "01",
     february: "02",
@@ -23995,8 +23872,7 @@ function parseLKDate(input) {
     december: "12"
   };
   const month = months[match[2].toLowerCase()];
-  if (!month)
-    return "";
+  if (!month) return "";
   return `${match[3]}-${month}-${match[1].padStart(2, "0")}`;
 }
 var genericScraper = async (tld, domain, opts) => {
@@ -24017,16 +23893,14 @@ var genericScraper = async (tld, domain, opts) => {
           }
         });
         const setCookie = pre.headers.get("set-cookie");
-        if (setCookie)
-          cookieHeader = setCookie;
+        if (setCookie) cookieHeader = setCookie;
         console.log(`[whois:generic] preflight ${pre.status} setCookie=${setCookie ? "yes" : "no"} tld=${tld} url=${url}`);
       }
       const headers = {
         "User-Agent": UA,
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       };
-      if (cookieHeader)
-        headers["Cookie"] = cookieHeader;
+      if (cookieHeader) headers["Cookie"] = cookieHeader;
       const response = await fetchTimeout(url, { headers });
       console.log(`[whois:generic] ${response.status} tld=${tld} url=${url}`);
       if (response.ok) {
@@ -24104,8 +23978,7 @@ for (const tld of webTlds) {
 async function fetchViaWebScraper(domain, tld) {
   const scraper = scraperMap[tld];
   console.log(`[whois] fetchViaWebScraper tld=${tld} domain=${domain} scraper=${scraper ? scraper.name || "anonymous" : "none"}`);
-  if (!scraper)
-    return null;
+  if (!scraper) return null;
   const labels = domain.split(".");
   const opts = tldConfig.get(tld);
   try {
@@ -24138,13 +24011,11 @@ var CONFIG = {
 // src/api.ts
 function cleanDomain(input) {
   let domain = input.trim();
-  if (!domain)
-    return "";
+  if (!domain) return "";
   domain = domain.replace(/\s+/g, "").replace(/\.{2,}/g, ".").replace(/^\.+|\.+$/g, "");
   try {
     const url = new URL(domain);
-    if (url.hostname)
-      domain = url.hostname;
+    if (url.hostname) domain = url.hostname;
   } catch {
   }
   return domain;
@@ -24156,27 +24027,20 @@ function isAllowedProxyPoolUrl(raw) {
   } catch {
     return false;
   }
-  if (url.protocol !== "http:" && url.protocol !== "https:")
-    return false;
+  if (url.protocol !== "http:" && url.protocol !== "https:") return false;
   const host = url.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-  if (!host)
-    return false;
+  if (!host) return false;
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal") || host === "::1" || host === "0.0.0.0") {
     return false;
   }
-  if (/^127\./.test(host))
-    return false;
-  if (/^10\./.test(host))
-    return false;
-  if (/^192\.168\./.test(host))
-    return false;
-  if (/^169\.254\./.test(host))
-    return false;
+  if (/^127\./.test(host)) return false;
+  if (/^10\./.test(host)) return false;
+  if (/^192\.168\./.test(host)) return false;
+  if (/^169\.254\./.test(host)) return false;
   const private172 = host.match(/^172\.(\d+)\./);
   if (private172) {
     const second = Number(private172[1]);
-    if (second >= 16 && second <= 31)
-      return false;
+    if (second >= 16 && second <= 31) return false;
   }
   return true;
 }
@@ -24279,12 +24143,9 @@ async function lookup(rawDomain, options) {
     console.log(`[whois] WEB not enabled for suffix=${suffix} asciiSuffix=${asciiSuffix}`);
   }
   const availableSources = [];
-  if (rdapServer)
-    availableSources.push("RDAP");
-  if (hasWhoisServer(suffix) && proxyPoolUrl)
-    availableSources.push("WHOIS");
-  if (webTldSet.has(suffix) || webTldSet.has(asciiSuffix))
-    availableSources.push("Web");
+  if (rdapServer) availableSources.push("RDAP");
+  if (hasWhoisServer(suffix) && proxyPoolUrl) availableSources.push("WHOIS");
+  if (webTldSet.has(suffix) || webTldSet.has(asciiSuffix)) availableSources.push("Web");
   if (availableSources.length === 0) {
     return {
       code: 1,
@@ -24300,14 +24161,10 @@ async function lookup(rawDomain, options) {
   };
 }
 function hasGoodResult(r) {
-  if (!r)
-    return false;
-  if (r.reserved)
-    return true;
-  if (r.registered && !r.unknown)
-    return true;
-  if (!r.registered && !r.unknown)
-    return true;
+  if (!r) return false;
+  if (r.reserved) return true;
+  if (r.registered && !r.unknown) return true;
+  if (!r.registered && !r.unknown) return true;
   return false;
 }
 
