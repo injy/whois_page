@@ -104,13 +104,17 @@ export async function fetchViaWebScraper(
   tld: string,
 ): Promise<WebScraperResult | null> {
   const scraper = scraperMap[tld];
+  console.log(`[whois] fetchViaWebScraper tld=${tld} domain=${domain} scraper=${scraper ? scraper.name || "anonymous" : "none"}`);
   if (!scraper) return null;
 
   const labels = domain.split(".");
   const opts = tldConfig.get(tld);
   try {
-    return await scraper(domain, labels, opts);
-  } catch {
+    const r = await scraper(domain, labels, opts);
+    console.log(`[whois] fetchViaWebScraper result=${r ? "ok len=" + r.rawText.length : "null"} tld=${tld}`);
+    return r;
+  } catch (e) {
+    console.error(`[whois] fetchViaWebScraper error tld=${tld}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
     return null;
   }
 }

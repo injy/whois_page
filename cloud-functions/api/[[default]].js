@@ -23478,6 +23478,7 @@ var hmScraper = async (domain) => {
       }
     });
     const cookies = homeResponse.headers.get("set-cookie") || "";
+    console.log(`[whois:hm] HEAD ${homeResponse.status} setCookie=${cookies ? "yes" : "no"} domain=${domain}`);
     const url = "https://www.registry.hm/HR_whois2.php";
     const formData = new URLSearchParams({
       domain_name: domain,
@@ -23492,15 +23493,18 @@ var hmScraper = async (domain) => {
       },
       body: formData.toString()
     });
+    console.log(`[whois:hm] POST ${response.status} type=${response.headers.get("content-type")} domain=${domain}`);
     if (!response.ok)
       return null;
     const html = await response.text();
     const match = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+    console.log(`[whois:hm] pre=${!!match} htmlLen=${html.length} domain=${domain}`);
     if (match) {
       return { rawText: match[1] };
     }
     return { rawText: htmlToWhoisText(html) };
-  } catch {
+  } catch (e) {
+    console.error(`[whois:hm] error domain=${domain}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
     return null;
   }
 };
@@ -24015,6 +24019,7 @@ var genericScraper = async (tld, domain, opts) => {
         const setCookie = pre.headers.get("set-cookie");
         if (setCookie)
           cookieHeader = setCookie;
+        console.log(`[whois:generic] preflight ${pre.status} setCookie=${setCookie ? "yes" : "no"} tld=${tld} url=${url}`);
       }
       const headers = {
         "User-Agent": UA,
@@ -24023,14 +24028,18 @@ var genericScraper = async (tld, domain, opts) => {
       if (cookieHeader)
         headers["Cookie"] = cookieHeader;
       const response = await fetchTimeout(url, { headers });
+      console.log(`[whois:generic] ${response.status} tld=${tld} url=${url}`);
       if (response.ok) {
         const html = await response.text();
+        console.log(`[whois:generic] got htmlLen=${html.length} tld=${tld}`);
         return { rawText: htmlToWhoisText(html) };
       }
-    } catch {
+    } catch (e) {
+      console.error(`[whois:generic] error tld=${tld} url=${url}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
       continue;
     }
   }
+  console.log(`[whois:generic] no source ok tld=${tld} domain=${domain}`);
   return null;
 };
 
@@ -24094,13 +24103,17 @@ for (const tld of webTlds) {
 }
 async function fetchViaWebScraper(domain, tld) {
   const scraper = scraperMap[tld];
+  console.log(`[whois] fetchViaWebScraper tld=${tld} domain=${domain} scraper=${scraper ? scraper.name || "anonymous" : "none"}`);
   if (!scraper)
     return null;
   const labels = domain.split(".");
   const opts = tldConfig.get(tld);
   try {
-    return await scraper(domain, labels, opts);
-  } catch {
+    const r = await scraper(domain, labels, opts);
+    console.log(`[whois] fetchViaWebScraper result=${r ? "ok len=" + r.rawText.length : "null"} tld=${tld}`);
+    return r;
+  } catch (e) {
+    console.error(`[whois] fetchViaWebScraper error tld=${tld}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
     return null;
   }
 }
@@ -24192,12 +24205,15 @@ async function lookup(rawDomain, options) {
     }
   }
   const proxyPoolUrl = requestedPool || CONFIG.WHOIS_PROXY_POOL_URL || void 0;
+  console.log(`[whois] lookup domain=${domain} suffix=${suffix} asciiSuffix=${asciiSuffix} registrable=${registrableDomain}`);
   const rdapServer = findRdapServer(suffix);
+  console.log(`[whois] rdapServer=${rdapServer ?? "none"} suffix=${suffix}`);
   if (rdapServer) {
     try {
       const rdapResponse = await fetchRdap(rdapServer, registrableDomain);
       const result = parseRdap(suffix, rdapResponse.code, rdapResponse.data);
       if (hasGoodResult(result)) {
+        console.log(`[whois] RDAP good result suffix=${suffix}`);
         return {
           code: 0,
           msg: "Query successful",
@@ -24206,12 +24222,16 @@ async function lookup(rawDomain, options) {
           sourceUsed: "rdap"
         };
       }
-    } catch {
+      console.log(`[whois] RDAP result not good, falling through suffix=${suffix}`);
+    } catch (e) {
+      console.error(`[whois] RDAP error suffix=${suffix}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
     }
   }
+  console.log(`[whois] whois hasServer=${hasWhoisServer(suffix)} pool=${proxyPoolUrl ?? "none"} suffix=${suffix}`);
   if (hasWhoisServer(suffix) && proxyPoolUrl) {
     try {
       const whoisResponse = await fetchWhoisViaProxy(proxyPoolUrl, registrableDomain, suffix);
+      console.log(`[whois] WHOIS response=${whoisResponse ? "ok len=" + whoisResponse.rawText.length : "null"} suffix=${suffix}`);
       if (whoisResponse) {
         const result = parseWhoisText(whoisResponse.rawText, suffix);
         if (hasGoodResult(result)) {
@@ -24223,8 +24243,10 @@ async function lookup(rawDomain, options) {
             sourceUsed: "whois"
           };
         }
+        console.log(`[whois] WHOIS result not good, falling through suffix=${suffix}`);
       }
-    } catch {
+    } catch (e) {
+      console.error(`[whois] WHOIS error suffix=${suffix}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
     }
   }
   const webTldSet = new Set(
@@ -24233,8 +24255,10 @@ async function lookup(rawDomain, options) {
     )
   );
   if (webTldSet.has(suffix) || webTldSet.has(asciiSuffix)) {
+    console.log(`[whois] WEB enabled, calling scraper suffix=${suffix} domain=${registrableDomain}`);
     try {
       const scraperResult = await fetchViaWebScraper(registrableDomain, asciiSuffix);
+      console.log(`[whois] WEB scraper result=${scraperResult ? "ok len=" + scraperResult.rawText.length : "null"} suffix=${suffix}`);
       if (scraperResult) {
         const result = scraperResult.data ?? parseWhoisText(scraperResult.rawText, suffix);
         if (hasGoodResult(result)) {
@@ -24246,9 +24270,13 @@ async function lookup(rawDomain, options) {
             sourceUsed: "web"
           };
         }
+        console.log(`[whois] WEB result not good, falling through suffix=${suffix}`);
       }
-    } catch {
+    } catch (e) {
+      console.error(`[whois] WEB error suffix=${suffix}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
     }
+  } else {
+    console.log(`[whois] WEB not enabled for suffix=${suffix} asciiSuffix=${asciiSuffix}`);
   }
   const availableSources = [];
   if (rdapServer)
@@ -24264,6 +24292,7 @@ async function lookup(rawDomain, options) {
       data: null
     };
   }
+  console.log(`[whois] ALL SOURCES FAILED domain=${registrableDomain} tried=${availableSources.join(",")}`);
   return {
     code: 1,
     msg: `All lookup sources failed for '${registrableDomain}'. Tried: ${availableSources.join(", ")}.`,

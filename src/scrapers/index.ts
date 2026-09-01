@@ -671,14 +671,15 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
       },
     });
     const cookies = homeResponse.headers.get("set-cookie") || "";
-    
+    console.log(`[whois:hm] HEAD ${homeResponse.status} setCookie=${cookies ? "yes" : "no"} domain=${domain}`);
+
     // Submit query
     const url = "https://www.registry.hm/HR_whois2.php";
     const formData = new URLSearchParams({
       domain_name: domain,
       submit: "Check WHOIS record",
     });
-    
+
     const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
@@ -688,16 +689,19 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
       },
       body: formData.toString(),
     });
+    console.log(`[whois:hm] POST ${response.status} type=${response.headers.get("content-type")} domain=${domain}`);
     if (!response.ok) return null;
     const html = await response.text();
-    
+
     // Extract from <pre> tag
     const match = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
+    console.log(`[whois:hm] pre=${!!match} htmlLen=${html.length} domain=${domain}`);
     if (match) {
       return { rawText: match[1] };
     }
     return { rawText: htmlToWhoisText(html) };
-  } catch {
+  } catch (e) {
+    console.error(`[whois:hm] error domain=${domain}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
     return null;
   }
 };
@@ -1240,6 +1244,7 @@ export const genericScraper = async (
         });
         const setCookie = pre.headers.get("set-cookie");
         if (setCookie) cookieHeader = setCookie;
+        console.log(`[whois:generic] preflight ${pre.status} setCookie=${setCookie ? "yes" : "no"} tld=${tld} url=${url}`);
       }
 
       const headers: Record<string, string> = {
@@ -1249,13 +1254,17 @@ export const genericScraper = async (
       if (cookieHeader) headers["Cookie"] = cookieHeader;
 
       const response = await fetchTimeout(url, { headers });
+      console.log(`[whois:generic] ${response.status} tld=${tld} url=${url}`);
       if (response.ok) {
         const html = await response.text();
+        console.log(`[whois:generic] got htmlLen=${html.length} tld=${tld}`);
         return { rawText: htmlToWhoisText(html) };
       }
-    } catch {
+    } catch (e) {
+      console.error(`[whois:generic] error tld=${tld} url=${url}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
       continue;
     }
   }
+  console.log(`[whois:generic] no source ok tld=${tld} domain=${domain}`);
   return null;
 };

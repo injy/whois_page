@@ -109,14 +109,17 @@ export async function lookup(
     }
   }
   const proxyPoolUrl = requestedPool || CONFIG.WHOIS_PROXY_POOL_URL || undefined;
+  console.log(`[whois] lookup domain=${domain} suffix=${suffix} asciiSuffix=${asciiSuffix} registrable=${registrableDomain}`);
 
   // Priority 1: RDAP
   const rdapServer = findRdapServer(suffix);
+  console.log(`[whois] rdapServer=${rdapServer ?? "none"} suffix=${suffix}`);
   if (rdapServer) {
     try {
       const rdapResponse = await fetchRdap(rdapServer, registrableDomain);
       const result = parseRdap(suffix, rdapResponse.code, rdapResponse.data);
       if (hasGoodResult(result)) {
+        console.log(`[whois] RDAP good result suffix=${suffix}`);
         return {
           code: 0,
           msg: "Query successful",
@@ -125,15 +128,19 @@ export async function lookup(
           sourceUsed: "rdap",
         };
       }
-    } catch {
+      console.log(`[whois] RDAP result not good, falling through suffix=${suffix}`);
+    } catch (e) {
+      console.error(`[whois] RDAP error suffix=${suffix}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
       // RDAP failed, fall through to WHOIS
     }
   }
 
   // Priority 2: WHOIS via proxy pool
+  console.log(`[whois] whois hasServer=${hasWhoisServer(suffix)} pool=${proxyPoolUrl ?? "none"} suffix=${suffix}`);
   if (hasWhoisServer(suffix) && proxyPoolUrl) {
     try {
       const whoisResponse = await fetchWhoisViaProxy(proxyPoolUrl, registrableDomain, suffix);
+      console.log(`[whois] WHOIS response=${whoisResponse ? "ok len=" + whoisResponse.rawText.length : "null"} suffix=${suffix}`);
       if (whoisResponse) {
         const result = parseWhoisText(whoisResponse.rawText, suffix);
         if (hasGoodResult(result)) {
@@ -145,8 +152,10 @@ export async function lookup(
             sourceUsed: "whois",
           };
         }
+        console.log(`[whois] WHOIS result not good, falling through suffix=${suffix}`);
       }
-    } catch {
+    } catch (e) {
+      console.error(`[whois] WHOIS error suffix=${suffix}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
       // WHOIS failed, fall through to web scraper
     }
   }
@@ -159,8 +168,10 @@ export async function lookup(
     ),
   );
   if (webTldSet.has(suffix) || webTldSet.has(asciiSuffix)) {
+    console.log(`[whois] WEB enabled, calling scraper suffix=${suffix} domain=${registrableDomain}`);
     try {
       const scraperResult = await fetchViaWebScraper(registrableDomain, asciiSuffix);
+      console.log(`[whois] WEB scraper result=${scraperResult ? "ok len=" + scraperResult.rawText.length : "null"} suffix=${suffix}`);
       if (scraperResult) {
         // Prefer structured data the scraper extracted; fall back to parsing
         // its raw text the same way a plain WHOIS response would be parsed.
@@ -175,10 +186,14 @@ export async function lookup(
             sourceUsed: "web",
           };
         }
+        console.log(`[whois] WEB result not good, falling through suffix=${suffix}`);
       }
-    } catch {
+    } catch (e) {
+      console.error(`[whois] WEB error suffix=${suffix}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
       // Web scraper failed
     }
+  } else {
+    console.log(`[whois] WEB not enabled for suffix=${suffix} asciiSuffix=${asciiSuffix}`);
   }
 
   // All sources exhausted
@@ -195,6 +210,7 @@ export async function lookup(
     };
   }
 
+  console.log(`[whois] ALL SOURCES FAILED domain=${registrableDomain} tried=${availableSources.join(",")}`);
   return {
     code: 1,
     msg: `All lookup sources failed for '${registrableDomain}'. Tried: ${availableSources.join(", ")}.`,
