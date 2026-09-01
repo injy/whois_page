@@ -1003,27 +1003,56 @@ export const tjScraper = async (domain: string): Promise<WebScraperResult | null
 };
 
 // TT - Trinidad and Tobago (from original project getTT())
+// The result is rendered as an HTML table; mirror the original getTT() which
+// reads each 2-cell <tr> and emits "Key: Value" lines so the shared
+// parseWhoisText("tt") rules (which expect a colon after the label) can apply.
 export const ttScraper = async (domain: string): Promise<WebScraperResult | null> => {
+  const ua =
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
   try {
     const url = "https://nic.tt/cgi-bin/search.pl";
-    const formData = new URLSearchParams({
-      name: domain,
-      Search: "Search",
-    });
-    
+    const body = new URLSearchParams({ name: domain, Search: "Search" }).toString();
     const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": ua,
       },
-      body: formData.toString(),
+      body,
     });
-    if (!response.ok) return null;
+    console.log(`[whois:tt] POST ${response.status} domain=${domain}`);
+    if (!response.ok) {
+      return { rawText: "", error: `nic.tt POST ${url} -> HTTP ${response.status}` };
+    }
     const html = await response.text();
-    return { rawText: htmlToWhoisText(html) };
-  } catch {
-    return null;
+
+    // Mirror getTT(): strip &nbsp then read each 2-cell <tr> as "Key: Value".
+    const { document } = parseHTML(html.replace(/&nbsp/g, " "));
+
+    const trs = Array.from(document.querySelectorAll("tr"));
+    const rows = trs.filter((tr) => tr.querySelectorAll("td").length === 2);
+
+    if (rows.length === 0) {
+      // No result table -> the page shows a plain message
+      // (e.g. "This Domain Name is available.") inside div.main.
+      const main = document.querySelector("div.main");
+      const text = (main?.textContent || document.body?.textContent || "").trim();
+      return { rawText: text };
+    }
+
+    let whois = "";
+    for (const tr of rows) {
+      const tds = tr.querySelectorAll("td");
+      const key = (tds[0].textContent || "").trim();
+      const value = (tds[1].textContent || "").trim();
+      if (key) whois += `${key}: ${value}\n`;
+    }
+    whois = whois.replace(/ \(owner can view under Retrieve->Domain Details\)/g, "");
+
+    return { rawText: whois };
+  } catch (e) {
+    console.error(`[whois:tt] error domain=${domain}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
+    return { rawText: "", error: `ttScraper exception: ${e instanceof Error ? e.message : String(e)}` };
   }
 };
 

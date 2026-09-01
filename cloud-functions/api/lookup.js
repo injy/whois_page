@@ -11337,6 +11337,7 @@ var RULES = {
   "rs": { timezone: "Europe/Belgrade" },
   "\u0441\u0440\u0431": { timezone: "Europe/Belgrade" },
   "sm": { dateFormat: "d/m/Y" },
+  "tt": { dateFormat: "M j, Y" },
   "st": { timezone: "Africa/Sao_Tome" },
   "tw": { timezone: "Asia/Taipei" },
   "\u53F0\u6E7E": { timezone: "Asia/Taipei" },
@@ -23655,25 +23656,44 @@ var tjScraper = async (domain) => {
   }
 };
 var ttScraper = async (domain) => {
+  const ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
   try {
     const url = "https://nic.tt/cgi-bin/search.pl";
-    const formData = new URLSearchParams({
-      name: domain,
-      Search: "Search"
-    });
+    const body = new URLSearchParams({ name: domain, Search: "Search" }).toString();
     const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": ua
       },
-      body: formData.toString()
+      body
     });
-    if (!response.ok) return null;
+    console.log(`[whois:tt] POST ${response.status} domain=${domain}`);
+    if (!response.ok) {
+      return { rawText: "", error: `nic.tt POST ${url} -> HTTP ${response.status}` };
+    }
     const html = await response.text();
-    return { rawText: htmlToWhoisText(html) };
-  } catch {
-    return null;
+    const { document } = parseHTML(html.replace(/&nbsp/g, " "));
+    const trs = Array.from(document.querySelectorAll("tr"));
+    const rows = trs.filter((tr) => tr.querySelectorAll("td").length === 2);
+    if (rows.length === 0) {
+      const main = document.querySelector("div.main");
+      const text = (main?.textContent || document.body?.textContent || "").trim();
+      return { rawText: text };
+    }
+    let whois = "";
+    for (const tr of rows) {
+      const tds = tr.querySelectorAll("td");
+      const key2 = (tds[0].textContent || "").trim();
+      const value = (tds[1].textContent || "").trim();
+      if (key2) whois += `${key2}: ${value}
+`;
+    }
+    whois = whois.replace(/ \(owner can view under Retrieve->Domain Details\)/g, "");
+    return { rawText: whois };
+  } catch (e) {
+    console.error(`[whois:tt] error domain=${domain}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
+    return { rawText: "", error: `ttScraper exception: ${e instanceof Error ? e.message : String(e)}` };
   }
 };
 var vnScraper = async (domain) => {

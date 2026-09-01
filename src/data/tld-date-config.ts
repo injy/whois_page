@@ -60,6 +60,7 @@ const RULES: Rules = {
   "rs": { timezone: "Europe/Belgrade" },
   "срб": { timezone: "Europe/Belgrade" },
   "sm": { dateFormat: "d/m/Y" },
+  "tt": { dateFormat: "M j, Y" },
   "st": { timezone: "Africa/Sao_Tome" },
   "tw": { timezone: "Asia/Taipei" },
   "台湾": { timezone: "Asia/Taipei" },
