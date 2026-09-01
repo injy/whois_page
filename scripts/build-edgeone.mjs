@@ -13,6 +13,7 @@
  * Output:
  *   dist/index.html                      static page
  *   cloud-functions/api/lookup.js       GET /api/lookup?domain=
+ *   cloud-functions/api/index.js        GET /api and /api/ (bare directory)
  *   cloud-functions/api/[[default]].js  GET /api/<domain>
  *   cloud-functions/package.json        marks the functions as ESM
  *   middleware.js                       rewrites /?domain= to /api/lookup
@@ -32,6 +33,7 @@ const outDir = process.env.EO_OUT_DIR ? resolve(process.env.EO_OUT_DIR) : join(r
 const functions = [
   { entry: "src/edgeone/middleware.ts", out: "middleware.js" },
   { entry: "src/edgeone/lookup.ts", out: "cloud-functions/api/lookup.js" },
+  { entry: "src/edgeone/api-root.ts", out: "cloud-functions/api/index.js" },
   { entry: "src/edgeone/catch-all.ts", out: "cloud-functions/api/[[default]].js" },
 ];
 
