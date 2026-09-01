@@ -459,9 +459,13 @@ function getJS(): string {
   function formatDisplayDate(iso){
     var d=new Date(iso);
     if(isNaN(d.getTime()))return iso;
+    if(!/[T ]\d{2}:\d{2}/.test(iso)){
+      // The record carries no time. Render midnight instead of shifting the
+      // day into UTC+8, which would turn a bare 2027-06-05 into 08:00:00.
+      return padNum(d.getUTCFullYear(),4)+"-"+padNum(d.getUTCMonth()+1,2)+"-"+padNum(d.getUTCDate(),2)+" 00:00:00 "+DISPLAY_UTC_LABEL;
+    }
     var shifted=new Date(d.getTime()+DISPLAY_UTC_OFFSET_HOURS*3600000);
     var ymd=padNum(shifted.getUTCFullYear(),4)+"-"+padNum(shifted.getUTCMonth()+1,2)+"-"+padNum(shifted.getUTCDate(),2);
-    if(!/[T ]\d{2}:\d{2}/.test(iso))return ymd;
     return ymd+" "+padNum(shifted.getUTCHours(),2)+":"+padNum(shifted.getUTCMinutes(),2)+":"+padNum(shifted.getUTCSeconds(),2)+" "+DISPLAY_UTC_LABEL;
   }
 

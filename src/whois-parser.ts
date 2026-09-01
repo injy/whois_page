@@ -1,109 +1,183 @@
 import type { WhoisResult } from "./parser";
 import { parseRegistryDate } from "./tld-date";
+import {
+  getTldParseConfig,
+  BASE_PATTERNS,
+  type TldField,
+  type TldParseConfig,
+} from "./data/tld-parse-config";
 
-const BASE_RE = /^[\t ]*(?:PATTERN)[\.\t ]*:(.+)$/im;
+/**
+ * Per-extension WHOIS/web text parser.
+ *
+ * Every rule (the regex used for a field, and how the matched text becomes a
+ * value) comes from the original PHP project and lives in tld-parse-config.ts,
+ * which is generated from the 81 Parser subclasses. This module only implements
+ * the extraction mechanics; a field with no override here falls back to the
+ * base behaviour that the PHP base Parser defines.
+ */
 
-function buildRe(patterns: string[]): RegExp {
-  return new RegExp(`^[\\t ]*(?:${patterns.join("|")})[\\.\\t ]*:(.+)$`, "im");
+function pat(field: TldField, cfg?: TldParseConfig): RegExp {
+  const p = cfg?.patterns?.[field] ?? BASE_PATTERNS[field];
+  return new RegExp(p.source, p.flags);
 }
 
-function matchFirst(data: string, re: RegExp): string {
+function firstGroup(data: string, re: RegExp): string {
   const m = data.match(re);
   return m ? m[1].trim() : "";
 }
 
-function matchAll(data: string, re: RegExp): string[] {
-  const results: string[] = [];
+function allGroups(data: string, re: RegExp): string[] {
+  const out: string[] = [];
+  const g = new RegExp(re.source, "gim");
   let m: RegExpExecArray | null;
-  const globalRe = new RegExp(re.source, "gim");
-  while ((m = globalRe.exec(data)) !== null) {
-    const val = m[1].trim();
-    if (val && !results.includes(val)) results.push(val);
+  while ((m = g.exec(data)) !== null) {
+    const v = m[1].trim();
+    if (v && !out.includes(v)) out.push(v);
   }
-  return results;
+  return out;
 }
 
-const RESERVED_KEYWORDS = [
-  "reserved by (?:the )?registry", "has been reserved", "prohibited string",
-  "reserved word", "status:\\tnot allowed", "status: forbidden",
-  "on a restricted list", "illegal characters", "object is blocked",
-  "has usage restrictions", "can ?not be registered", "is not available",
-  "domain(?: name)? is not allowed", "status: not available",
-  "not available for registration", "reserved domain name",
-  "name is restricted", "status: unavailable",
-  "domain (?:name )?(?:is )?reserved", "is a reserved name",
-  "status: prohibited", "forbiden name", "domain blocked",
-  "restricted from registration",
-];
+const STATUS_URL_RE = /^(.+)\s+(?:(https?:\/\/\S+)|\((https?:\/\/[^\s)]+)\))/i;
 
-const UNREGISTERED_KEYWORDS = [
-  "no match", "not? found", "not exist", "no data", "nothing found",
-  "status: available", "status:\\tavailable", "no object found",
-  "unregistered domain name", "could not be found", "no entries found",
-  "status: free", "is available for registration", "not registered",
-  "has not been registered", "domain (?:name )?is available",
-  "no record found", "no such domain", "object_not_found",
-  "domain unknown", "no information", "no records found",
-  "is available for purchase",
-];
+/** Base getStatus(): every status line, splitting a trailing link. */
+function baseStatus(data: string, cfg?: TldParseConfig): Array<{ text: string; url: string }> {
+  return allGroups(data, pat("status", cfg)).map((text) => {
+    const urlMatch = text.match(STATUS_URL_RE);
+    if (urlMatch) return { text: urlMatch[1].trim(), url: urlMatch[2] || urlMatch[3] };
+    return { text, url: "" };
+  });
+}
 
-const DOMAIN_KEYWORDS = [
-  "domain name", "domain", "domainname", "domain  name",
-  "domain name \\(utf8\\)",
-];
+function extractNameServers(data: string, cfg?: TldParseConfig): string[] {
+  const re = pat("nameServers", cfg);
+  const ns = cfg?.ns;
 
-const REGISTRAR_KEYWORDS = [
-  "registrar", "registrar name", "sponsoring registrar",
-  "registrar-name", "registration service provider",
-];
+  if (!ns) {
+    return allGroups(data, re).map((v) => v.split(/[\t ]+/)[0].toLowerCase());
+  }
 
-const REGISTRAR_URL_KEYWORDS = [
-  "registrar url", "registrar website", "registrar-url",
-  "sponsoring registrar url", "registration service url",
-];
+  if (ns.mode === "tn") {
+    const block = data.match(/dns servers(.+?)(?=\n\n)/is);
+    if (!block) return [];
+    return allGroups(block[1], re).map((v) => v.split(/[\t ]+/)[0].toLowerCase());
+  }
 
-const REGISTRAR_IANA_ID_KEYWORDS = [
-  "registrar iana id", "sponsoring registrar iana id",
-];
+  // getNameServersFromExplode($sep, $subSep): take the FIRST "Name Server:" line,
+  // split its value by $sep, then by $subSep for the host name.
+  const val = firstGroup(data, re);
+  if (!val) return [];
+  const lines = val.split(ns.sep).map((s) => s.trim()).filter(Boolean);
+  const unique = [...new Set(lines)];
+  return unique.map((p) => p.split(ns.subSep ?? " ")[0].toLowerCase());
+}
 
-const REGISTRAR_WHOIS_SERVER_KEYWORDS = [
-  "registrar whois server", "whois server", "whois tcp uri",
-];
+function extractStatus(data: string, cfg?: TldParseConfig): Array<{ text: string; url: string }> {
+  const re = pat("status", cfg);
+  const st = cfg?.status;
 
-const CREATION_DATE_KEYWORDS = [
-  "creation date", "registered", "created", "activation date",
-  "registration date", "registration time", "submission date",
-  "domain name commencement date", "domain creation date", "assigned",
-  "created on", "record created", "registered date", "domain created",
-  "registered on", "first registered date", "activation", "created date",
-];
+  if (!st) return baseStatus(data, cfg);
 
-const EXPIRATION_DATE_KEYWORDS = [
-  "registry expiry date", "expires", "expire",
-  "registrar registration expiration date", "expiry date",
-  "expiration date", "cutoff date", "expiration time", "expiration",
-  "domain expiration date", "validity", "expire date", "expires on",
-  "record expires on", "paid-till", "valid until", "exp date", "expiry",
-];
+  if (st.mode === "explode") {
+    const val = firstGroup(data, re);
+    if (!val) return [];
+    const lines = val.split(st.sep).map((s) => s.trim()).filter(Boolean);
+    const unique = [...new Set(lines)];
+    return unique.map((p) => ({
+      text: st.subSep ? p.split(st.subSep)[0].trim() : p,
+      url: "",
+    }));
+  }
 
-const UPDATED_DATE_KEYWORDS = [
-  "updated date", "last modified", "changed", "modified",
-  "modified date", "update date", "last-update", "last updated date",
-  "last update", "last updated", "record last updated on",
-  "last updated on", "modification date", "updated",
-];
+  if (st.mode === "bo" || st.mode === "fr" || st.mode === "ua") {
+    let sub = "";
+    if (st.mode === "bo") {
+      const m = data.match(/other data(.+)/is);
+      sub = m ? m[1] : "";
+    } else if (st.mode === "fr") {
+      const m = data.match(/^(.+?)source:/is);
+      sub = m ? m[1] : "";
+    } else {
+      const m = data.match(/^(.+)% registrar:/is);
+      sub = m ? m[1] : "";
+    }
+    return baseStatus(sub, cfg);
+  }
 
-const STATUS_KEYWORDS = [
-  "domain status", "status", "registration status",
-  "domain state", "registry status",
-];
+  if (st.mode === "jp") {
+    // SLD statuses carry a "(yyyy-mm-dd)" suffix that must be dropped.
+    return allGroups(data, re).map((p) => ({ text: p.split("(")[0].trim(), url: "" }));
+  }
 
-const NAME_SERVER_KEYWORDS = [
-  "name server", "nserver", "host ?name", "nameserver",
-];
+  if (st.mode === "qa") {
+    return allGroups(data, re).map((p) => ({ text: p.split(/[ \t]+/)[0], url: "" }));
+  }
 
-const DNSSEC_KEYWORDS = ["dnssec", "delegation signed", "signed", "dnssec signed"];
-const DNSSEC_EXTRA_KEYWORDS = ["dsrecord", "dnskey", "key1-tag", "signing key", "ds-rdata", "ds", "ds record"];
+  if (st.mode === "lu") {
+    const val = firstGroup(data, re);
+    if (!val) return [];
+    const out: Array<{ text: string; url: string }> = [];
+    const m = val.match(/^(.+?)(?: \(.+\))?$/);
+    if (m) {
+      out.push({ text: m[1].trim(), url: "" });
+      if (m[2]) out.push({ text: m[2].trim(), url: "" });
+    }
+    return out;
+  }
+
+  return [];
+}
+
+function extractUpdatedDate(data: string, cfg?: TldParseConfig): string {
+  const mode = cfg?.updatedDate;
+  if (mode === "none") return "";
+  if (mode === "last") {
+    const all = allGroups(data, pat("updatedDate", cfg));
+    return all.length ? all[all.length - 1] : "";
+  }
+  if (mode === "beforeContact") {
+    const m = data.match(/^(.+?)contact:/is);
+    const sub = m ? m[1] : data;
+    return firstGroup(sub, pat("updatedDate", cfg));
+  }
+  return firstGroup(data, pat("updatedDate", cfg));
+}
+
+function extractAvailableDate(data: string, cfg?: TldParseConfig): string {
+  if (cfg?.availableDate === "none") return "";
+  return firstGroup(data, pat("availableDate", cfg));
+}
+
+function isUnregistered(data: string, cfg?: TldParseConfig): boolean {
+  if (cfg?.unregistered === "bb") {
+    return data.includes('ERROR: Can\'t open file "/home/whois/static/update.txt');
+  }
+  if (cfg?.unregistered === "cu") {
+    return data.startsWith("Existe(n) 0 dominio(s)");
+  }
+  return pat("unregistered", cfg).test(data);
+}
+
+function isReserved(data: string, cfg?: TldParseConfig): boolean {
+  return pat("reserved", cfg).test(data);
+}
+
+function extractDnssec(data: string, cfg?: TldParseConfig): boolean | null {
+  if (cfg?.dnssec === "zoneSignedDs") {
+    return /dns servers \(zone signed, \d ds records?\)/i.test(data);
+  }
+  // Mirrors PHP getDNSSECSigned: a matched "DNSSEC:" line with a non-empty
+  // value returns true/false by membership, empty value falls through.
+  const m = data.match(pat("dnssec", cfg));
+  if (m) {
+    const value = m[1].trim();
+    if (value) return DNSSEC_SIGNED_VALUES.includes(value.toLowerCase());
+  }
+  const extra = firstGroup(data, pat("dnssecExtra", cfg));
+  if (extra) return !!extra.trim();
+  return null;
+}
+
 const DNSSEC_SIGNED_VALUES = [
   "signeddelegation", "signed", "yes", "active", "signed delegation", "true",
 ];
@@ -143,24 +217,27 @@ for (const [canonical, { aliases }] of Object.entries(STATUS_MAP)) {
 /**
  * Parse a WHOIS response (or the "Key: Value" text a web scraper produced).
  *
- * `extension` selects the registry's date rules: many registries print local
- * time and/or a non-ISO format, see tld-date.ts. Callers should pass the
- * public suffix they queried; omitting it keeps the neutral UTC behaviour.
+ * `extension` selects the registry's rules: many registries print local time
+ * and/or a non-ISO date format, and a few refine how the text is split into
+ * values. Omitting it keeps the neutral base behaviour.
  */
 export function parseWhoisText(data: string, extension?: string): WhoisResult {
   const result = createEmpty();
   if (!data) { result.unknown = true; return result; }
 
-  const reservedRe = new RegExp(RESERVED_KEYWORDS.join("|"), "i");
-  if (reservedRe.test(data)) { result.reserved = true; return result; }
+  const cfg = extension ? getTldParseConfig(extension) : undefined;
 
-  const unregisteredRe = new RegExp(UNREGISTERED_KEYWORDS.join("|"), "i");
-  if (unregisteredRe.test(data)) { return result; }
+  if (isReserved(data, cfg)) { result.reserved = true; return result; }
+
+  if (isUnregistered(data, cfg)) { return result; }
 
   result.registered = true;
-  result.domain = matchFirst(data, buildRe(DOMAIN_KEYWORDS)).toLowerCase().split(" ")[0] || "";
+  result.domain = firstGroup(data, pat("domain", cfg)).toLowerCase().split(" ")[0] || "";
 
-  const registrar = matchFirst(data, buildRe(REGISTRAR_KEYWORDS));
+  result.registryWebsite = firstGroup(data, pat("registryWebsite", cfg));
+  result.registryWHOISServer = firstGroup(data, pat("registryWHOISServer", cfg));
+
+  const registrar = firstGroup(data, pat("registrar", cfg));
   const registrarUrlMatch = registrar.match(/(.+)\(( *https?:\/\/.+)\)/i);
   if (registrarUrlMatch) {
     result.registrar = registrarUrlMatch[1].trim();
@@ -169,36 +246,26 @@ export function parseWhoisText(data: string, extension?: string): WhoisResult {
     result.registrar = registrar;
   }
 
-  result.registrarURL = result.registrarURL || formatURL(matchFirst(data, buildRe(REGISTRAR_URL_KEYWORDS)));
-  const ianaId = matchFirst(data, buildRe(REGISTRAR_IANA_ID_KEYWORDS));
+  result.registrarURL = result.registrarURL || formatURL(firstGroup(data, pat("registrarURL", cfg)));
+  const ianaId = firstGroup(data, pat("registrarIANAId", cfg));
   if (/^\d+$/.test(ianaId)) result.registrarIANAId = ianaId;
-  result.registrarWHOISServer = matchFirst(data, buildRe(REGISTRAR_WHOIS_SERVER_KEYWORDS));
+  result.registrarWHOISServer = firstGroup(data, pat("registrarWHOISServer", cfg));
 
-  result.creationDate = matchFirst(data, buildRe(CREATION_DATE_KEYWORDS));
+  result.creationDate = firstGroup(data, pat("creationDate", cfg));
   result.creationDateISO8601 = parseRegistryDate(result.creationDate, extension);
-  result.expirationDate = matchFirst(data, buildRe(EXPIRATION_DATE_KEYWORDS));
+  result.expirationDate = firstGroup(data, pat("expirationDate", cfg));
   result.expirationDateISO8601 = parseRegistryDate(result.expirationDate, extension);
-  result.updatedDate = matchFirst(data, buildRe(UPDATED_DATE_KEYWORDS));
+  result.updatedDate = extractUpdatedDate(data, cfg);
   result.updatedDateISO8601 = parseRegistryDate(result.updatedDate, extension);
+  result.availableDate = extractAvailableDate(data, cfg);
+  result.availableDateISO8601 = parseRegistryDate(result.availableDate, extension);
 
-  const statusValues = matchAll(data, buildRe(STATUS_KEYWORDS));
-  result.status = statusValues.map((text) => {
-    const urlMatch = text.match(/^(.+)\s+(?:(https?:\/\/\S+)|\((https?:\/\/[^\s)]+)\))/i);
-    if (urlMatch) return { text: urlMatch[1].trim(), url: urlMatch[2] || urlMatch[3] };
-    return { text, url: "" };
-  });
+  result.status = extractStatus(data, cfg);
   formatStatus(result.status);
 
-  result.nameServers = matchAll(data, buildRe(NAME_SERVER_KEYWORDS))
-    .map((ns) => ns.split(/[\t ]+/)[0].toLowerCase());
+  result.nameServers = extractNameServers(data, cfg);
 
-  const dnssecVal = matchFirst(data, buildRe(DNSSEC_KEYWORDS));
-  if (dnssecVal) {
-    result.dnssecSigned = DNSSEC_SIGNED_VALUES.includes(dnssecVal.toLowerCase());
-  } else {
-    const dnssecExtra = matchFirst(data, buildRe(DNSSEC_EXTRA_KEYWORDS));
-    if (dnssecExtra) result.dnssecSigned = !!dnssecExtra.trim();
-  }
+  result.dnssecSigned = extractDnssec(data, cfg);
 
   result.createdAgo = dateDiffText(result.creationDateISO8601, "now");
   result.createdAgoSeconds = dateDiffSeconds(result.creationDateISO8601, "now");

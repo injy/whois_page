@@ -11664,192 +11664,299 @@ function parseRegistryDate(raw, extension) {
     return legacyToIso(input);
   if (config?.dateFormat) {
     const wall2 = parseWithFormat(input, config.dateFormat);
-    if (wall2) {
-      const iso = wallToIso(wall2, timezone, hasTime);
-      if (iso)
-        return iso;
-    }
+    if (wall2)
+      return wallToIso(wall2, timezone, hasTime);
+    return null;
   }
   const wall = parseLooseWall(input);
-  if (wall) {
-    const iso = wallToIso(wall, hasTime ? timezone : "UTC", hasTime);
-    if (iso)
-      return iso;
-  }
-  return legacyToIso(input);
+  if (wall)
+    return wallToIso(wall, hasTime ? timezone : "UTC", hasTime);
+  return null;
+}
+
+// src/data/tld-parse-config.ts
+var BASE_PATTERNS = {
+  domain: { source: "^[	 ]*(?:domain name|domain|domainname|domain  name|domain name \\(utf8\\))[\\.	 ]*:(.+)$", flags: "im" },
+  reserved: { source: "reserved by (?:the )?registry|has been reserved|prohibited string|reserved word|status:	not allowed|status: forbidden|on a restricted list|illegal characters|object is blocked|has usage restrictions|can ?not be registered|is not available|domain(?: name)? is not allowed|status: not available|not available for registration|reserved domain name|name is restricted|status: unavailable|domain (?:name )?(?:is )?reserved|is a reserved name|status: prohibited|forbiden name|domain blocked|restricted from registration", flags: "i" },
+  unregistered: { source: "no match|not? found|not exist|no data|nothing found|status: available|status:	available|no object found|unregistered domain name|could not be found|no entries found|status: free|is available for registration|not registered|has not been registered|domain (?:name )?is available|no record found|no such domain|object_not_found|domain unknown|no information|no records found|is available for purchase", flags: "i" },
+  registryWebsite: { source: "^[	 ]*(?:remarks:      registration information)[\\.	 ]*:(.+)$", flags: "im" },
+  registryWHOISServer: { source: "^[	 ]*(?:registry whois server|whois-web|whois database responses|whois)[\\.	 ]*:(.+)$", flags: "im" },
+  registrar: { source: "^[	 ]*(?:registrar|registrar name|sponsoring registrar|registrar-name|registration service provider)[\\.	 ]*:(.+)$", flags: "im" },
+  registrarURL: { source: "^[	 ]*(?:registrar url|registrar website|registrar-url|sponsoring registrar url|registration service url)[\\.	 ]*:(.+)$", flags: "im" },
+  registrarIANAId: { source: "^[	 ]*(?:registrar iana id|sponsoring registrar iana id)[\\.	 ]*:(.+)$", flags: "im" },
+  registrarWHOISServer: { source: "^[	 ]*(?:registrar whois server|whois server|whois tcp uri)[\\.	 ]*:(.+)$", flags: "im" },
+  creationDate: { source: "^[	 ]*(?:creation date|registered|created|activation date|registration date|registration time|submission date|domain name commencement date|domain creation date|assigned|created on|record created|registered date|domain created|registered on|first registered date|activation|created date)[\\.	 ]*:(.+)$", flags: "im" },
+  expirationDate: { source: "^[	 ]*(?:registry expiry date|expires|expire|registrar registration expiration date|expiry date|expiration date|cutoff date|expiration time|expiration|domain expiration date|validity|expire date|expires on|record expires on|paid-till|valid until|exp date|expiry)[\\.	 ]*:(.+)$", flags: "im" },
+  updatedDate: { source: "^[	 ]*(?:updated date|last modified|changed|modified|modified date|update date|last-update|last updated date|last update|last updated|record last updated on|last updated on|modification date|updated)[\\.	 ]*:(.+)$", flags: "im" },
+  availableDate: { source: "^[	 ]*(?:available|date_to_release|free-date)[\\.	 ]*:(.+)$", flags: "im" },
+  status: { source: "^[	 ]*(?:domain status|status|registration status|domain state|registry status)[\\.	 ]*:(.+)$", flags: "im" },
+  nameServers: { source: "^[	 ]*(?:name server|nserver|host ?name|nameserver)[\\.	 ]*:(.+)$", flags: "im" },
+  dnssec: { source: "^[	 ]*(?:dnssec|delegation signed|signed|dnssec signed)[\\.	 ]*:(.+)$", flags: "im" },
+  dnssecExtra: { source: "^[	 ]*(?:dsrecord|dnskey|key1-tag|signing key|ds-rdata|ds|ds record)[\\.	 ]*:(.+)$", flags: "im" }
+};
+var RULES2 = {
+  "ac.uk": { patterns: { domain: { source: "(?:domain name|domain|domainname|domain  name|domain name \\(utf8\\)):\n(.+)", flags: "i" }, registryWebsite: { source: "(?:remarks:      registration information):\n(.+)", flags: "i" }, registryWHOISServer: { source: "(?:registry whois server|whois-web|whois database responses|whois):\n(.+)", flags: "i" }, registrar: { source: "(?:registered by):\n(.+)", flags: "i" }, registrarURL: { source: "(?:registrar url|registrar website|registrar-url|sponsoring registrar url|registration service url):\n(.+)", flags: "i" }, registrarIANAId: { source: "(?:registrar iana id|sponsoring registrar iana id):\n(.+)", flags: "i" }, registrarWHOISServer: { source: "(?:registrar whois server|whois server|whois tcp uri):\n(.+)", flags: "i" }, creationDate: { source: "(?:creation date|registered|created|activation date|registration date|registration time|submission date|domain name commencement date|domain creation date|assigned|created on|record created|registered date|domain created|registered on|first registered date|activation|created date):\n(.+)", flags: "i" }, expirationDate: { source: "(?:renewal date):\n(.+)", flags: "i" }, updatedDate: { source: "(?:updated date|last modified|changed|modified|modified date|update date|last-update|last updated date|last update|last updated|record last updated on|last updated on|modification date|updated):\n(.+)", flags: "i" }, availableDate: { source: "(?:available|date_to_release|free-date):\n(.+)", flags: "i" }, status: { source: "(?:domain status|status|registration status|domain state|registry status):\n(.+)", flags: "i" }, nameServers: { source: "servers:(.+?)(?=\n\n)", flags: "is" }, dnssec: { source: "(?:dnssec|delegation signed|signed|dnssec signed):\n(.+)", flags: "i" }, dnssecExtra: { source: "(?:dsrecord|dnskey|key1-tag|signing key|ds-rdata|ds|ds record):\n(.+)", flags: "i" } }, ns: { "mode": "explode", "sep": "\n", "subSep": "	" } },
+  "am": { patterns: { reserved: { source: "reserved name", flags: "i" }, nameServers: { source: "dns servers(?: \\(zone signed, \\d ds records?\\))?:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "," }, dnssec: "zoneSignedDs" },
+  "ar": { patterns: { unregistered: { source: "no se encuentra registrado", flags: "i" } } },
+  "aw": { patterns: { unregistered: { source: "is free", flags: "i" }, registrar: { source: "registrar:\r\n(.+)", flags: "i" }, nameServers: { source: "nameservers:(.+?)(?=\r\n\r\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\r\n", "subSep": " " } },
+  "ax": { patterns: { registrarURL: { source: "^[	 ]*(?:www)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "bb": { unregistered: "bb" },
+  "bd": { patterns: { status: { source: "^[	 ]*(?:domain status)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "^[	 ]*(?:(?:primary|secondary) dns)[\\.	 ]*:(.+)$", flags: "im" } }, updatedDate: "none" },
+  "be": { patterns: { registrar: { source: "^[	 ]*(?:registrar:\r\n	name)[\\.	 ]*:(.+)$", flags: "im" }, registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "Flags:(.+?)(?=\r\n\r\n)", flags: "s" }, nameServers: { source: "nameservers:(.*?)(?=\r\n\r\n)", flags: "is" }, dnssecExtra: { source: "keys:\r\n(.+)", flags: "i" } }, ns: { "mode": "explode", "sep": "\r\n", "subSep": " " }, status: { "mode": "explode", "sep": "\r\n" } },
+  "bg": { patterns: { nameServers: { source: "name server information:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "," } },
+  "bn": { patterns: { nameServers: { source: "name servers:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "bo": { patterns: { status: { source: "^[	 ]*(?:state)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "^[	 ]*(?:dns\\d)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "bo" } },
+  "co.pl": { patterns: { domain: { source: "^[	 ]*(?:name)[\\.	 ]*:(.+)$", flags: "im" }, updatedDate: { source: "^[	 ]*(?:lastmod)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "^[	 ]*(?:ns)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "co.uz": { patterns: { nameServers: { source: "name server:(?! (?:not[\\. ]defined\\.|<no value>))(.+)", flags: "i" } } },
+  "com.uz": { patterns: { nameServers: { source: "name server:(?! (?:not[\\. ]defined\\.|<no value>))(.+)", flags: "i" } } },
+  "cr": { updatedDate: "beforeContact" },
+  "cu": { patterns: { domain: { source: "^[	 ]*(?:dominio)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "^[	 ]*(?:dns (?:primario|secundario)\nnombre)[\\.	 ]*:(.+)$", flags: "im" } }, unregistered: "cu" },
+  "cz": { updatedDate: "beforeContact" },
+  "ee": { patterns: { domain: { source: "^[	 ]*(?:domain:\nname)[\\.	 ]*:(.+)$", flags: "im" }, registrar: { source: "^[	 ]*(?:registrar:\nname)[\\.	 ]*:(.+)$", flags: "im" }, registrarURL: { source: "^[	 ]*(?:url)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "eu": { patterns: { registrar: { source: "^[	 ]*(?:registrar:\n {8}name)[\\.	 ]*:(.+)$", flags: "im" }, registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "name servers:(.+?)(?=\n\n)", flags: "is" }, dnssecExtra: { source: "keys:\n(.+)", flags: "i" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "fi": { patterns: { registrarURL: { source: "^[	 ]*(?:www)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "fr": { patterns: { registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "^[	 ]*(?:eppstatus)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "fr" } },
+  "ga": { patterns: { domain: { source: "^[	 ]*(?:nom de domaine)[\\.	 ]*:(.+)$", flags: "im" }, creationDate: { source: "^[	 ]*(?:date de cr\xE9ation)[\\.	 ]*:(.+)$", flags: "im" }, expirationDate: { source: "^[	 ]*(?:date d'expiration)[\\.	 ]*:(.+)$", flags: "im" }, updatedDate: { source: "^[	 ]*(?:derni\xE8re modification)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "^[	 ]*(?:statut)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "^[	 ]*(?:serveur de noms)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "gf": { patterns: { unregistered: { source: "le nom de domaine .+ est disponible", flags: "i" }, creationDate: { source: "record created on (.+)\\.", flags: "i" }, expirationDate: { source: "record expires on (.+)\\.", flags: "i" }, updatedDate: { source: "record last updated on (.+)\\.", flags: "i" }, nameServers: { source: "^[	 ]*(?:name server s?)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "gg": { patterns: { domain: { source: "(?:domain name|domain|domainname|domain  name|domain name \\(utf8\\)):(.+?)(?=\n\n)", flags: "is" }, registryWebsite: { source: "(?:remarks:      registration information):(.+?)(?=\n\n)", flags: "is" }, registryWHOISServer: { source: "(?:registry whois server|whois-web|whois database responses|whois):(.+?)(?=\n\n)", flags: "is" }, registrar: { source: "(?:registrar|registrar name|sponsoring registrar|registrar-name|registration service provider):(.+?)(?=\n\n)", flags: "is" }, registrarURL: { source: "(?:registrar url|registrar website|registrar-url|sponsoring registrar url|registration service url):(.+?)(?=\n\n)", flags: "is" }, registrarIANAId: { source: "(?:registrar iana id|sponsoring registrar iana id):(.+?)(?=\n\n)", flags: "is" }, registrarWHOISServer: { source: "(?:registrar whois server|whois server|whois tcp uri):(.+?)(?=\n\n)", flags: "is" }, creationDate: { source: "registered on (.+)", flags: "i" }, expirationDate: { source: "(?:registry expiry date|expires|expire|registrar registration expiration date|expiry date|expiration date|cutoff date|expiration time|expiration|domain expiration date|validity|expire date|expires on|record expires on|paid-till|valid until|exp date|expiry):(.+?)(?=\n\n)", flags: "is" }, updatedDate: { source: "(?:updated date|last modified|changed|modified|modified date|update date|last-update|last updated date|last update|last updated|record last updated on|last updated on|modification date|updated):(.+?)(?=\n\n)", flags: "is" }, availableDate: { source: "(?:available|date_to_release|free-date):(.+?)(?=\n\n)", flags: "is" }, status: { source: "(?:domain status|status|registration status|domain state|registry status):(.+?)(?=\n\n)", flags: "is" }, nameServers: { source: "(?:name servers):(.+?)(?=\n\n)", flags: "is" }, dnssec: { source: "(?:dnssec|delegation signed|signed|dnssec signed):(.+?)(?=\n\n)", flags: "is" }, dnssecExtra: { source: "(?:dsrecord|dnskey|key1-tag|signing key|ds-rdata|ds|ds record):(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "\n" } },
+  "gr": { patterns: { reserved: { source: "not acceptable", flags: "i" }, unregistered: { source: "can be provisioned", flags: "i" }, registrar: { source: "^[	 ]*(?:name)[\\.	 ]*:(.+)$", flags: "im" }, registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "gt": { patterns: { nameServers: { source: "servers:(.*?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "gw": { patterns: { nameServers: { source: "^[	 ]*(?:nameserver \\(hostname\\))[\\.	 ]*:(.+)$", flags: "im" } } },
+  "hk": { patterns: { nameServers: { source: "name servers information:(.+?)(?=\n\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "hk.com": { availableDate: "none" },
+  "hk.org": { availableDate: "none" },
+  "hm": { patterns: { registrarURL: { source: "^[	 ]*(?:referral url)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "hu": { patterns: { nameServers: { source: "^[	 ]*(?:name servers)[\\.	 ]*:(.+)$", flags: "im" } }, ns: { "mode": "explode", "sep": " ", "subSep": " " } },
+  "il": { patterns: { registrarURL: { source: "^[	 ]*(?:registrar info)[\\.	 ]*:(.+)$", flags: "im" }, updatedDate: { source: "^changed:.+(\\d{8}) \\(changed\\)$", flags: "im" } }, updatedDate: "last" },
+  "inc.hk": { availableDate: "none" },
+  "it": { patterns: { reserved: { source: "status: {13}unassignable", flags: "i" }, unregistered: { source: "status: {13}available", flags: "i" }, registrar: { source: "^[	 ]*(?:registrar\n  organization)[\\.	 ]*:(.+)$", flags: "im" }, registrarURL: { source: "^[	 ]*(?:web)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "nameservers(.+)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "/" } },
+  "je": { patterns: { domain: { source: "(?:domain name|domain|domainname|domain  name|domain name \\(utf8\\)):(.+?)(?=\n\n)", flags: "is" }, registryWebsite: { source: "(?:remarks:      registration information):(.+?)(?=\n\n)", flags: "is" }, registryWHOISServer: { source: "(?:registry whois server|whois-web|whois database responses|whois):(.+?)(?=\n\n)", flags: "is" }, registrar: { source: "(?:registrar|registrar name|sponsoring registrar|registrar-name|registration service provider):(.+?)(?=\n\n)", flags: "is" }, registrarURL: { source: "(?:registrar url|registrar website|registrar-url|sponsoring registrar url|registration service url):(.+?)(?=\n\n)", flags: "is" }, registrarIANAId: { source: "(?:registrar iana id|sponsoring registrar iana id):(.+?)(?=\n\n)", flags: "is" }, registrarWHOISServer: { source: "(?:registrar whois server|whois server|whois tcp uri):(.+?)(?=\n\n)", flags: "is" }, creationDate: { source: "registered on (.+)", flags: "i" }, expirationDate: { source: "(?:registry expiry date|expires|expire|registrar registration expiration date|expiry date|expiration date|cutoff date|expiration time|expiration|domain expiration date|validity|expire date|expires on|record expires on|paid-till|valid until|exp date|expiry):(.+?)(?=\n\n)", flags: "is" }, updatedDate: { source: "(?:updated date|last modified|changed|modified|modified date|update date|last-update|last updated date|last update|last updated|record last updated on|last updated on|modification date|updated):(.+?)(?=\n\n)", flags: "is" }, availableDate: { source: "(?:available|date_to_release|free-date):(.+?)(?=\n\n)", flags: "is" }, status: { source: "(?:domain status|status|registration status|domain state|registry status):(.+?)(?=\n\n)", flags: "is" }, nameServers: { source: "(?:name servers):(.+?)(?=\n\n)", flags: "is" }, dnssec: { source: "(?:dnssec|delegation signed|signed|dnssec signed):(.+?)(?=\n\n)", flags: "is" }, dnssecExtra: { source: "(?:dsrecord|dnskey|key1-tag|signing key|ds-rdata|ds|ds record):(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "\n" } },
+  "jo": { patterns: { nameServers: { source: "^[	 ]*(?:(?:primary|secondary) server\\d{0,2})[\\.	 ]*:(.+)$", flags: "im" } } },
+  "jp": { patterns: { domain: { source: "\\[(?:domain name|domain|domainname|domain  name|domain name \\(utf8\\))\\](.+)", flags: "i" }, reserved: { source: "\\[Status\\] {24}reserved", flags: "i" }, registryWebsite: { source: "\\[(?:remarks:      registration information)\\](.+)", flags: "i" }, registryWHOISServer: { source: "\\[(?:registry whois server|whois-web|whois database responses|whois)\\](.+)", flags: "i" }, registrar: { source: "\\[(?:registrar|registrar name|sponsoring registrar|registrar-name|registration service provider)\\](.+)", flags: "i" }, registrarURL: { source: "\\[(?:registrar url|registrar website|registrar-url|sponsoring registrar url|registration service url)\\](.+)", flags: "i" }, registrarIANAId: { source: "\\[(?:registrar iana id|sponsoring registrar iana id)\\](.+)", flags: "i" }, registrarWHOISServer: { source: "\\[(?:registrar whois server|whois server|whois tcp uri)\\](.+)", flags: "i" }, creationDate: { source: "\\[(?:creation date|registered|created|activation date|registration date|registration time|submission date|domain name commencement date|domain creation date|assigned|created on|record created|registered date|domain created|registered on|first registered date|activation|created date)\\](.+)", flags: "i" }, expirationDate: { source: "\\[(?:registry expiry date|expires|expire|registrar registration expiration date|expiry date|expiration date|cutoff date|expiration time|expiration|domain expiration date|validity|expire date|expires on|record expires on|paid-till|valid until|exp date|expiry)\\](.+)", flags: "i" }, updatedDate: { source: "\\[(?:updated date|last modified|changed|modified|modified date|update date|last-update|last updated date|last update|last updated|record last updated on|last updated on|modification date|updated)\\](.+)", flags: "i" }, availableDate: { source: "\\[(?:available|date_to_release|free-date)\\](.+)", flags: "i" }, status: { source: "\\[(?:status|state|lock status)\\](.+)", flags: "i" }, nameServers: { source: "\\[(?:name server|nserver|host ?name|nameserver)\\](.+)", flags: "i" }, dnssec: { source: "\\[(?:dnssec|delegation signed|signed|dnssec signed)\\](.+)", flags: "i" }, dnssecExtra: { source: "\\[(?:dsrecord|dnskey|key1-tag|signing key|ds-rdata|ds|ds record)\\](.+)", flags: "i" } }, status: { "mode": "jp" } },
+  "kg": { patterns: { domain: { source: "^domain (.+) (?:\\(.+\\))?$", flags: "im" }, status: { source: "^domain .+ \\((.+)\\)$", flags: "im" }, nameServers: { source: "name servers in the listed order:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "kr": { patterns: { registrar: { source: "^[	 ]*(?:authorized agency)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "kz": { patterns: { registrar: { source: "^[	 ]*(?:current registar)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "domain status :(.+?)(?=\n\\S)", flags: "is" }, nameServers: { source: "^[	 ]*(?:(?:primary|secondary) server)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "ls": { updatedDate: "beforeContact" },
+  "lt": { patterns: { reserved: { source: "status:	{3}blocked", flags: "i" }, unregistered: { source: "status:	{3}available", flags: "i" } } },
+  "ltd.hk": { availableDate: "none" },
+  "lu": { patterns: { reserved: { source: "domaintype: {5}reserved", flags: "i" }, status: { source: "^[	 ]*(?:domaintype)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "lu" } },
+  "lv": { patterns: { registrar: { source: "\\[registrar\\]\n.+\nname:(.+)", flags: "i" } }, updatedDate: "none" },
+  "md": { patterns: { expirationDate: { source: "^[	 ]*(?:expire[sd] on)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": " " } },
+  "mk": { updatedDate: "beforeContact" },
+  "mo": { patterns: { creationDate: { source: "record created on (.+)", flags: "i" }, expirationDate: { source: "record expires on (.+)", flags: "i" }, nameServers: { source: "domain name servers:\n -+\n(.+)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "mq": { patterns: { unregistered: { source: "le nom de domaine .+ est disponible", flags: "i" }, creationDate: { source: "record created on (.+)\\.", flags: "i" }, expirationDate: { source: "record expires on (.+)\\.", flags: "i" }, updatedDate: { source: "record last updated on (.+)\\.", flags: "i" }, nameServers: { source: "^[	 ]*(?:name server s?)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "mt": { patterns: { nameServers: { source: "^[	 ]*(?:nameserver \\d)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "mw": { updatedDate: "beforeContact" },
+  "mx": { patterns: { registrarURL: { source: "^[	 ]*(?:url)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "^[	 ]*(?:dns)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "nc": { patterns: { nameServers: { source: "^[	 ]*(?:domain server \\d)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "net.ru": { patterns: { status: { source: "^[	 ]*(?:state)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "," } },
+  "net.uz": { patterns: { nameServers: { source: "name server:(?! (?:not[\\. ]defined\\.|<no value>))(.+)", flags: "i" } } },
+  "nl": { patterns: { unregistered: { source: "is free", flags: "i" }, registrar: { source: "registrar:\r\n(.+)", flags: "i" }, nameServers: { source: "nameservers:(.+?)(?=\r\n\r\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\r\n", "subSep": " " } },
+  "np": { patterns: { nameServers: { source: "^[	 ]*(?:(?:primary|secondary) name server)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "org.ru": { patterns: { status: { source: "^[	 ]*(?:state)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "," } },
+  "org.uz": { patterns: { nameServers: { source: "name server:(?! (?:not[\\. ]defined\\.|<no value>))(.+)", flags: "i" } } },
+  "pf": { patterns: { domain: { source: "informations about '(.+)'", flags: "i" }, registrar: { source: "^[	 ]*(?:registrar compagnie name)[\\.	 ]*:(.+)$", flags: "im" }, creationDate: { source: "^[	 ]*(?:created \\(jj\\/mm\\/aaaa\\))[\\.	 ]*:(.+)$", flags: "im" }, expirationDate: { source: "^[	 ]*(?:expire \\(jj\\/mm\\/aaaa\\))[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "^[	 ]*(?:name server \\d)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "ph": { status: { "mode": "explode", "sep": "," } },
+  "pl": { patterns: { domain: { source: "domain name:(.+\\.pl)", flags: "i" }, registrar: { source: "registrar:\r\n(.+)", flags: "i" }, registrarURL: { source: "^(https?://.+)", flags: "im" }, expirationDate: { source: "^[	 ]*(?:(?:renewal|expiration) date)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "nameservers:(.+?)(?=\r\n\\S)", flags: "is" } }, ns: { "mode": "explode", "sep": "\r\n", "subSep": " " } },
+  "pm": { patterns: { registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "^[	 ]*(?:eppstatus)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "fr" } },
+  "pp.ru": { patterns: { status: { source: "^[	 ]*(?:state)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "," } },
+  "qa": { patterns: { reserved: { source: "reserved by qdr|is not available", flags: "i" } }, status: { "mode": "qa" } },
+  "re": { patterns: { registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "^[	 ]*(?:eppstatus)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "fr" } },
+  "ro": { patterns: { registrarURL: { source: "^[	 ]*(?:referral url)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "rs": { patterns: { nameServers: { source: "^[	 ]*(?:dns)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "ru": { patterns: { status: { source: "^[	 ]*(?:state)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "," } },
+  "si": { patterns: { reserved: { source: "is forbidden", flags: "i" } }, status: { "mode": "explode", "sep": "," } },
+  "sk": { patterns: { registrar: { source: "^[	 ]*(?:registrar:.+\nname:.+\norganization)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "," } },
+  "sm": { patterns: { reserved: { source: "reserved domain", flags: "i" }, nameServers: { source: "dns servers:(.+?)(?=\n\n|$)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "sn": { patterns: { domain: { source: "^[	 ]*(?:nom de domaine)[\\.	 ]*:(.+)$", flags: "im" }, creationDate: { source: "^[	 ]*(?:date de cr\xE9ation)[\\.	 ]*:(.+)$", flags: "im" }, expirationDate: { source: "^[	 ]*(?:date d'expiration)[\\.	 ]*:(.+)$", flags: "im" }, updatedDate: { source: "^[	 ]*(?:derni\xE8re modification)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "^[	 ]*(?:statut)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "^[	 ]*(?:serveur de noms)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "st": { patterns: { registrarURL: { source: "^[	 ]*(?:url)[\\.	 ]*:(.+)$", flags: "im" }, creationDate: { source: "^[	 ]*(?:created-date)[\\.	 ]*:(.+)$", flags: "im" }, expirationDate: { source: "^[	 ]*(?:expiration-date)[\\.	 ]*:(.+)$", flags: "im" }, updatedDate: { source: "^[	 ]*(?:updated-date)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "," } },
+  "su": { patterns: { status: { source: "^[	 ]*(?:state)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "," } },
+  "sv": { patterns: { domain: { source: "^[	 ]*(?:nombre de dominio)[\\.	 ]*:(.+)$", flags: "im" }, reserved: { source: "no se puede registrar", flags: "i" }, unregistered: { source: "no registrado", flags: "i" }, creationDate: { source: "^[	 ]*(?:fecha registro)[\\.	 ]*:(.+)$", flags: "im" }, expirationDate: { source: "^[	 ]*(?:fecha de vencimiento)[\\.	 ]*:(.+)$", flags: "im" }, availableDate: { source: "^[	 ]*(?:fecha de baja)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "^[	 ]*(?:estado)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "tf": { patterns: { registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "^[	 ]*(?:eppstatus)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "fr" } },
+  "tg": { patterns: { domain: { source: "(?:domain name|domain|domainname|domain  name|domain name \\(utf8\\)):\\.+(.+)", flags: "i" }, registryWebsite: { source: "(?:remarks:      registration information):\\.+(.+)", flags: "i" }, registryWHOISServer: { source: "(?:registry whois server|whois-web|whois database responses|whois):\\.+(.+)", flags: "i" }, registrar: { source: "(?:registrar|registrar name|sponsoring registrar|registrar-name|registration service provider):\\.+(.+)", flags: "i" }, registrarURL: { source: "(?:registrar url|registrar website|registrar-url|sponsoring registrar url|registration service url):\\.+(.+)", flags: "i" }, registrarIANAId: { source: "(?:registrar iana id|sponsoring registrar iana id):\\.+(.+)", flags: "i" }, registrarWHOISServer: { source: "(?:registrar whois server|whois server|whois tcp uri):\\.+(.+)", flags: "i" }, creationDate: { source: "(?:creation date|registered|created|activation date|registration date|registration time|submission date|domain name commencement date|domain creation date|assigned|created on|record created|registered date|domain created|registered on|first registered date|activation|created date):\\.+(.+)", flags: "i" }, expirationDate: { source: "(?:registry expiry date|expires|expire|registrar registration expiration date|expiry date|expiration date|cutoff date|expiration time|expiration|domain expiration date|validity|expire date|expires on|record expires on|paid-till|valid until|exp date|expiry):\\.+(.+)", flags: "i" }, updatedDate: { source: "(?:updated date|last modified|changed|modified|modified date|update date|last-update|last updated date|last update|last updated|record last updated on|last updated on|modification date|updated):\\.+(.+)", flags: "i" }, availableDate: { source: "(?:available|date_to_release|free-date):\\.+(.+)", flags: "i" }, status: { source: "(?:domain status|status|registration status|domain state|registry status):\\.+(.+)", flags: "i" }, nameServers: { source: "(?:name server \\(db\\)):\\.+(.+)", flags: "i" }, dnssec: { source: "(?:dnssec|delegation signed|signed|dnssec signed):\\.+(.+)", flags: "i" }, dnssecExtra: { source: "(?:dsrecord|dnskey|key1-tag|signing key|ds-rdata|ds|ds record):\\.+(.+)", flags: "i" } } },
+  "tm": { patterns: { nameServers: { source: "^[	 ]*(?:ns \\d)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "tn": { patterns: { nameServers: { source: "^[	 ]*(?:name)[\\.	 ]*:(.+)$", flags: "im" } }, ns: { "mode": "tn" } },
+  "tr": { patterns: { domain: { source: "^[	 ]*(?:\\*\\* domain name)[\\.	 ]*:(.+)$", flags: "im" }, registrar: { source: "^[	 ]*(?:organization name)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "domain servers:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "tt": { patterns: { expirationDate: { source: "expiration date: (.+) {6}", flags: "i" }, status: { source: "expiration date: .+ {6}(.+)", flags: "i" }, nameServers: { source: "^[	 ]*(?:dns hostnames)[\\.	 ]*:(.+)$", flags: "im" } }, ns: { "mode": "explode", "sep": ",", "subSep": " " } },
+  "tw": { patterns: { domain: { source: "^[	 ]*(?:domain name|\u8A3B\u518A\u539F\u578B\u57DF\u540D)[\\.	 ]*:(.+)$", flags: "im" }, reserved: { source: "\u7DB2\u57DF\u540D\u7A31\u4E0D\u5408\u898F\u5B9A|reserved name", flags: "i" }, creationDate: { source: "record created on (.+) ", flags: "i" }, expirationDate: { source: "record expires on (.+) ", flags: "i" }, nameServers: { source: "domain servers in listed order:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "," } },
+  "ua": { patterns: { registrar: { source: "^[	 ]*(?:organization)[\\.	 ]*:(.+)$", flags: "im" }, registrarURL: { source: "^[	 ]*(?:url)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "ua" } },
+  "uk": { patterns: { domain: { source: "domain name:(.+?)(?=\r\n\r\n)", flags: "is" }, registrar: { source: "registrar:\r\n(.+) \\[", flags: "i" }, registrarURL: { source: "^[	 ]*(?:url)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "registration status:(.+?)(?=\r\n\r\n)", flags: "is" }, nameServers: { source: "name servers:\r\n {8}(?!no name servers listed\\.)(.+?)(?=\r\n\r\n)", flags: "is" }, dnssec: { source: "dnssec:\r\n(.+)", flags: "i" } }, ns: { "mode": "explode", "sep": "\r\n", "subSep": " " }, status: { "mode": "explode", "sep": "\r\n" } },
+  "uz": { patterns: { nameServers: { source: "name server:(?! (?:not[\\. ]defined\\.|<no value>))(.+)", flags: "i" } } },
+  "ve": { updatedDate: "beforeContact" },
+  "wf": { patterns: { registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "^[	 ]*(?:eppstatus)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "fr" } },
+  "yt": { patterns: { registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "^[	 ]*(?:eppstatus)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "fr" } },
+  "za.net": { patterns: { domain: { source: "(?:domain name|domain|domainname|domain  name|domain name \\(utf8\\)) +:(.+)", flags: "i" }, registryWebsite: { source: "(?:remarks:      registration information) +:(.+)", flags: "i" }, registryWHOISServer: { source: "(?:registry whois server|whois-web|whois database responses|whois) +:(.+)", flags: "i" }, registrar: { source: "(?:registrar|registrar name|sponsoring registrar|registrar-name|registration service provider) +:(.+)", flags: "i" }, registrarURL: { source: "(?:registrar url|registrar website|registrar-url|sponsoring registrar url|registration service url) +:(.+)", flags: "i" }, registrarIANAId: { source: "(?:registrar iana id|sponsoring registrar iana id) +:(.+)", flags: "i" }, registrarWHOISServer: { source: "(?:registrar whois server|whois server|whois tcp uri) +:(.+)", flags: "i" }, creationDate: { source: "(?:creation date|registered|created|activation date|registration date|registration time|submission date|domain name commencement date|domain creation date|assigned|created on|record created|registered date|domain created|registered on|first registered date|activation|created date) +:(.+)", flags: "i" }, expirationDate: { source: "(?:registry expiry date|expires|expire|registrar registration expiration date|expiry date|expiration date|cutoff date|expiration time|expiration|domain expiration date|validity|expire date|expires on|record expires on|paid-till|valid until|exp date|expiry) +:(.+)", flags: "i" }, updatedDate: { source: "(?:updated date|last modified|changed|modified|modified date|update date|last-update|last updated date|last update|last updated|record last updated on|last updated on|modification date|updated) +:(.+)", flags: "i" }, availableDate: { source: "(?:available|date_to_release|free-date) +:(.+)", flags: "i" }, status: { source: "(?:domain status|status|registration status|domain state|registry status) +:(.+)", flags: "i" }, nameServers: { source: "domain name servers listed in order:(.+?)(?=\n\n)", flags: "is" }, dnssec: { source: "(?:dnssec|delegation signed|signed|dnssec signed) +:(.+)", flags: "i" }, dnssecExtra: { source: "(?:dsrecord|dnskey|key1-tag|signing key|ds-rdata|ds|ds record) +:(.+)", flags: "i" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "za.org": { patterns: { domain: { source: "(?:domain name|domain|domainname|domain  name|domain name \\(utf8\\)) +:(.+)", flags: "i" }, registryWebsite: { source: "(?:remarks:      registration information) +:(.+)", flags: "i" }, registryWHOISServer: { source: "(?:registry whois server|whois-web|whois database responses|whois) +:(.+)", flags: "i" }, registrar: { source: "(?:registrar|registrar name|sponsoring registrar|registrar-name|registration service provider) +:(.+)", flags: "i" }, registrarURL: { source: "(?:registrar url|registrar website|registrar-url|sponsoring registrar url|registration service url) +:(.+)", flags: "i" }, registrarIANAId: { source: "(?:registrar iana id|sponsoring registrar iana id) +:(.+)", flags: "i" }, registrarWHOISServer: { source: "(?:registrar whois server|whois server|whois tcp uri) +:(.+)", flags: "i" }, creationDate: { source: "(?:creation date|registered|created|activation date|registration date|registration time|submission date|domain name commencement date|domain creation date|assigned|created on|record created|registered date|domain created|registered on|first registered date|activation|created date) +:(.+)", flags: "i" }, expirationDate: { source: "(?:registry expiry date|expires|expire|registrar registration expiration date|expiry date|expiration date|cutoff date|expiration time|expiration|domain expiration date|validity|expire date|expires on|record expires on|paid-till|valid until|exp date|expiry) +:(.+)", flags: "i" }, updatedDate: { source: "(?:updated date|last modified|changed|modified|modified date|update date|last-update|last updated date|last update|last updated|record last updated on|last updated on|modification date|updated) +:(.+)", flags: "i" }, availableDate: { source: "(?:available|date_to_release|free-date) +:(.+)", flags: "i" }, status: { source: "(?:domain status|status|registration status|domain state|registry status) +:(.+)", flags: "i" }, nameServers: { source: "domain name servers listed in order:(.+?)(?=\n\n)", flags: "is" }, dnssec: { source: "(?:dnssec|delegation signed|signed|dnssec signed) +:(.+)", flags: "i" }, dnssecExtra: { source: "(?:dsrecord|dnskey|key1-tag|signing key|ds-rdata|ds|ds record) +:(.+)", flags: "i" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "\u03B5\u03BB": { patterns: { reserved: { source: "not acceptable", flags: "i" }, unregistered: { source: "can be provisioned", flags: "i" }, registrar: { source: "^[	 ]*(?:name)[\\.	 ]*:(.+)$", flags: "im" }, registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "\u03B5\u03C5": { patterns: { registrar: { source: "^[	 ]*(?:registrar:\n {8}name)[\\.	 ]*:(.+)$", flags: "im" }, registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "name servers:(.+?)(?=\n\n)", flags: "is" }, dnssecExtra: { source: "keys:\n(.+)", flags: "i" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "\u0431\u0433": { patterns: { nameServers: { source: "name server information:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "," } },
+  "\u0435\u044E": { patterns: { registrar: { source: "^[	 ]*(?:registrar:\n {8}name)[\\.	 ]*:(.+)$", flags: "im" }, registrarURL: { source: "^[	 ]*(?:website)[\\.	 ]*:(.+)$", flags: "im" }, nameServers: { source: "name servers:(.+?)(?=\n\n)", flags: "is" }, dnssecExtra: { source: "keys:\n(.+)", flags: "i" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "\u043C\u043A\u0434": { updatedDate: "beforeContact" },
+  "\u0440\u0444": { patterns: { status: { source: "^[	 ]*(?:state)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "," } },
+  "\u0441\u0440\u0431": { patterns: { nameServers: { source: "^[	 ]*(?:dns)[\\.	 ]*:(.+)$", flags: "im" } } },
+  "\u0443\u043A\u0440": { patterns: { nameServers: { source: "domain servers in listed order:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "\u049B\u0430\u0437": { patterns: { registrar: { source: "^[	 ]*(?:current registar)[\\.	 ]*:(.+)$", flags: "im" }, status: { source: "domain status :(.+?)(?=\n\\S)", flags: "is" }, nameServers: { source: "^[	 ]*(?:(?:primary|secondary) server)[\\.	 ]*:(.+)$", flags: "im" } }, status: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "\u0570\u0561\u0575": { patterns: { reserved: { source: "reserved name", flags: "i" }, nameServers: { source: "dns servers(?: \\(zone signed, \\d ds records?\\))?:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "," }, dnssec: "zoneSignedDs" },
+  "\u05D9\u05E9\u05E8\u05D0\u05DC": { patterns: { registrarURL: { source: "^[	 ]*(?:registrar info)[\\.	 ]*:(.+)$", flags: "im" }, updatedDate: { source: "^changed:.+(\\d{8}) \\(changed\\)$", flags: "im" } }, updatedDate: "last" },
+  "\u0627\u0644\u0627\u0631\u062F\u0646": { patterns: { nameServers: { source: "^[	 ]*(?:(?:primary|secondary) server\\d{0,2})[\\.	 ]*:(.+)$", flags: "im" } } },
+  "\u062A\u0648\u0646\u0633": { patterns: { nameServers: { source: "^[	 ]*(?:name)[\\.	 ]*:(.+)$", flags: "im" } }, ns: { "mode": "tn" } },
+  "\u0642\u0637\u0631": { patterns: { reserved: { source: "reserved by qdr|is not available", flags: "i" } }, status: { "mode": "qa" } },
+  "\u53F0\u6E7E": { patterns: { domain: { source: "^[	 ]*(?:domain name|\u8A3B\u518A\u539F\u578B\u57DF\u540D)[\\.	 ]*:(.+)$", flags: "im" }, reserved: { source: "\u7DB2\u57DF\u540D\u7A31\u4E0D\u5408\u898F\u5B9A|reserved name", flags: "i" }, creationDate: { source: "record created on (.+) ", flags: "i" }, expirationDate: { source: "record expires on (.+) ", flags: "i" }, nameServers: { source: "domain servers in listed order:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "," } },
+  "\u53F0\u7063": { patterns: { domain: { source: "^[	 ]*(?:domain name|\u8A3B\u518A\u539F\u578B\u57DF\u540D)[\\.	 ]*:(.+)$", flags: "im" }, reserved: { source: "\u7DB2\u57DF\u540D\u7A31\u4E0D\u5408\u898F\u5B9A|reserved name", flags: "i" }, creationDate: { source: "record created on (.+) ", flags: "i" }, expirationDate: { source: "record expires on (.+) ", flags: "i" }, nameServers: { source: "domain servers in listed order:(.+?)(?=\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " }, status: { "mode": "explode", "sep": "," } },
+  "\u6FB3\u9580": { patterns: { creationDate: { source: "record created on (.+)", flags: "i" }, expirationDate: { source: "record expires on (.+)", flags: "i" }, nameServers: { source: "domain name servers:\n -+\n(.+)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "\u9999\u6E2F": { patterns: { nameServers: { source: "name servers information:(.+?)(?=\n\n\n)", flags: "is" } }, ns: { "mode": "explode", "sep": "\n", "subSep": " " } },
+  "\uD55C\uAD6D": { patterns: { registrar: { source: "^[	 ]*(?:authorized agency)[\\.	 ]*:(.+)$", flags: "im" } } }
+};
+function getTldParseConfig(extension) {
+  return RULES2[extension.toLowerCase()];
 }
 
 // src/whois-parser.ts
-function buildRe(patterns) {
-  return new RegExp(`^[\\t ]*(?:${patterns.join("|")})[\\.\\t ]*:(.+)$`, "im");
+function pat(field, cfg) {
+  const p = cfg?.patterns?.[field] ?? BASE_PATTERNS[field];
+  return new RegExp(p.source, p.flags);
 }
-function matchFirst(data, re) {
+function firstGroup(data, re) {
   const m = data.match(re);
   return m ? m[1].trim() : "";
 }
-function matchAll(data, re) {
-  const results = [];
+function allGroups(data, re) {
+  const out = [];
+  const g = new RegExp(re.source, "gim");
   let m;
-  const globalRe = new RegExp(re.source, "gim");
-  while ((m = globalRe.exec(data)) !== null) {
-    const val = m[1].trim();
-    if (val && !results.includes(val))
-      results.push(val);
+  while ((m = g.exec(data)) !== null) {
+    const v = m[1].trim();
+    if (v && !out.includes(v))
+      out.push(v);
   }
-  return results;
+  return out;
 }
-var RESERVED_KEYWORDS = [
-  "reserved by (?:the )?registry",
-  "has been reserved",
-  "prohibited string",
-  "reserved word",
-  "status:\\tnot allowed",
-  "status: forbidden",
-  "on a restricted list",
-  "illegal characters",
-  "object is blocked",
-  "has usage restrictions",
-  "can ?not be registered",
-  "is not available",
-  "domain(?: name)? is not allowed",
-  "status: not available",
-  "not available for registration",
-  "reserved domain name",
-  "name is restricted",
-  "status: unavailable",
-  "domain (?:name )?(?:is )?reserved",
-  "is a reserved name",
-  "status: prohibited",
-  "forbiden name",
-  "domain blocked",
-  "restricted from registration"
-];
-var UNREGISTERED_KEYWORDS = [
-  "no match",
-  "not? found",
-  "not exist",
-  "no data",
-  "nothing found",
-  "status: available",
-  "status:\\tavailable",
-  "no object found",
-  "unregistered domain name",
-  "could not be found",
-  "no entries found",
-  "status: free",
-  "is available for registration",
-  "not registered",
-  "has not been registered",
-  "domain (?:name )?is available",
-  "no record found",
-  "no such domain",
-  "object_not_found",
-  "domain unknown",
-  "no information",
-  "no records found",
-  "is available for purchase"
-];
-var DOMAIN_KEYWORDS = [
-  "domain name",
-  "domain",
-  "domainname",
-  "domain  name",
-  "domain name \\(utf8\\)"
-];
-var REGISTRAR_KEYWORDS = [
-  "registrar",
-  "registrar name",
-  "sponsoring registrar",
-  "registrar-name",
-  "registration service provider"
-];
-var REGISTRAR_URL_KEYWORDS = [
-  "registrar url",
-  "registrar website",
-  "registrar-url",
-  "sponsoring registrar url",
-  "registration service url"
-];
-var REGISTRAR_IANA_ID_KEYWORDS = [
-  "registrar iana id",
-  "sponsoring registrar iana id"
-];
-var REGISTRAR_WHOIS_SERVER_KEYWORDS = [
-  "registrar whois server",
-  "whois server",
-  "whois tcp uri"
-];
-var CREATION_DATE_KEYWORDS = [
-  "creation date",
-  "registered",
-  "created",
-  "activation date",
-  "registration date",
-  "registration time",
-  "submission date",
-  "domain name commencement date",
-  "domain creation date",
-  "assigned",
-  "created on",
-  "record created",
-  "registered date",
-  "domain created",
-  "registered on",
-  "first registered date",
-  "activation",
-  "created date"
-];
-var EXPIRATION_DATE_KEYWORDS = [
-  "registry expiry date",
-  "expires",
-  "expire",
-  "registrar registration expiration date",
-  "expiry date",
-  "expiration date",
-  "cutoff date",
-  "expiration time",
-  "expiration",
-  "domain expiration date",
-  "validity",
-  "expire date",
-  "expires on",
-  "record expires on",
-  "paid-till",
-  "valid until",
-  "exp date",
-  "expiry"
-];
-var UPDATED_DATE_KEYWORDS = [
-  "updated date",
-  "last modified",
-  "changed",
-  "modified",
-  "modified date",
-  "update date",
-  "last-update",
-  "last updated date",
-  "last update",
-  "last updated",
-  "record last updated on",
-  "last updated on",
-  "modification date",
-  "updated"
-];
-var STATUS_KEYWORDS = [
-  "domain status",
-  "status",
-  "registration status",
-  "domain state",
-  "registry status"
-];
-var NAME_SERVER_KEYWORDS = [
-  "name server",
-  "nserver",
-  "host ?name",
-  "nameserver"
-];
-var DNSSEC_KEYWORDS = ["dnssec", "delegation signed", "signed", "dnssec signed"];
-var DNSSEC_EXTRA_KEYWORDS = ["dsrecord", "dnskey", "key1-tag", "signing key", "ds-rdata", "ds", "ds record"];
+var STATUS_URL_RE = /^(.+)\s+(?:(https?:\/\/\S+)|\((https?:\/\/[^\s)]+)\))/i;
+function baseStatus(data, cfg) {
+  return allGroups(data, pat("status", cfg)).map((text) => {
+    const urlMatch = text.match(STATUS_URL_RE);
+    if (urlMatch)
+      return { text: urlMatch[1].trim(), url: urlMatch[2] || urlMatch[3] };
+    return { text, url: "" };
+  });
+}
+function extractNameServers(data, cfg) {
+  const re = pat("nameServers", cfg);
+  const ns = cfg?.ns;
+  if (!ns) {
+    return allGroups(data, re).map((v) => v.split(/[\t ]+/)[0].toLowerCase());
+  }
+  if (ns.mode === "tn") {
+    const block = data.match(/dns servers(.+?)(?=\n\n)/is);
+    if (!block)
+      return [];
+    return allGroups(block[1], re).map((v) => v.split(/[\t ]+/)[0].toLowerCase());
+  }
+  const val = firstGroup(data, re);
+  if (!val)
+    return [];
+  const lines = val.split(ns.sep).map((s) => s.trim()).filter(Boolean);
+  const unique = [...new Set(lines)];
+  return unique.map((p) => p.split(ns.subSep ?? " ")[0].toLowerCase());
+}
+function extractStatus(data, cfg) {
+  const re = pat("status", cfg);
+  const st = cfg?.status;
+  if (!st)
+    return baseStatus(data, cfg);
+  if (st.mode === "explode") {
+    const val = firstGroup(data, re);
+    if (!val)
+      return [];
+    const lines = val.split(st.sep).map((s) => s.trim()).filter(Boolean);
+    const unique = [...new Set(lines)];
+    return unique.map((p) => ({
+      text: st.subSep ? p.split(st.subSep)[0].trim() : p,
+      url: ""
+    }));
+  }
+  if (st.mode === "bo" || st.mode === "fr" || st.mode === "ua") {
+    let sub = "";
+    if (st.mode === "bo") {
+      const m = data.match(/other data(.+)/is);
+      sub = m ? m[1] : "";
+    } else if (st.mode === "fr") {
+      const m = data.match(/^(.+?)source:/is);
+      sub = m ? m[1] : "";
+    } else {
+      const m = data.match(/^(.+)% registrar:/is);
+      sub = m ? m[1] : "";
+    }
+    return baseStatus(sub, cfg);
+  }
+  if (st.mode === "jp") {
+    return allGroups(data, re).map((p) => ({ text: p.split("(")[0].trim(), url: "" }));
+  }
+  if (st.mode === "qa") {
+    return allGroups(data, re).map((p) => ({ text: p.split(/[ \t]+/)[0], url: "" }));
+  }
+  if (st.mode === "lu") {
+    const val = firstGroup(data, re);
+    if (!val)
+      return [];
+    const out = [];
+    const m = val.match(/^(.+?)(?: \(.+\))?$/);
+    if (m) {
+      out.push({ text: m[1].trim(), url: "" });
+      if (m[2])
+        out.push({ text: m[2].trim(), url: "" });
+    }
+    return out;
+  }
+  return [];
+}
+function extractUpdatedDate(data, cfg) {
+  const mode = cfg?.updatedDate;
+  if (mode === "none")
+    return "";
+  if (mode === "last") {
+    const all = allGroups(data, pat("updatedDate", cfg));
+    return all.length ? all[all.length - 1] : "";
+  }
+  if (mode === "beforeContact") {
+    const m = data.match(/^(.+?)contact:/is);
+    const sub = m ? m[1] : data;
+    return firstGroup(sub, pat("updatedDate", cfg));
+  }
+  return firstGroup(data, pat("updatedDate", cfg));
+}
+function extractAvailableDate(data, cfg) {
+  if (cfg?.availableDate === "none")
+    return "";
+  return firstGroup(data, pat("availableDate", cfg));
+}
+function isUnregistered(data, cfg) {
+  if (cfg?.unregistered === "bb") {
+    return data.includes(`ERROR: Can't open file "/home/whois/static/update.txt`);
+  }
+  if (cfg?.unregistered === "cu") {
+    return data.startsWith("Existe(n) 0 dominio(s)");
+  }
+  return pat("unregistered", cfg).test(data);
+}
+function isReserved2(data, cfg) {
+  return pat("reserved", cfg).test(data);
+}
+function extractDnssec(data, cfg) {
+  if (cfg?.dnssec === "zoneSignedDs") {
+    return /dns servers \(zone signed, \d ds records?\)/i.test(data);
+  }
+  const m = data.match(pat("dnssec", cfg));
+  if (m) {
+    const value = m[1].trim();
+    if (value)
+      return DNSSEC_SIGNED_VALUES.includes(value.toLowerCase());
+  }
+  const extra = firstGroup(data, pat("dnssecExtra", cfg));
+  if (extra)
+    return !!extra.trim();
+  return null;
+}
 var DNSSEC_SIGNED_VALUES = [
   "signeddelegation",
   "signed",
@@ -11895,18 +12002,19 @@ function parseWhoisText(data, extension) {
     result.unknown = true;
     return result;
   }
-  const reservedRe = new RegExp(RESERVED_KEYWORDS.join("|"), "i");
-  if (reservedRe.test(data)) {
+  const cfg = extension ? getTldParseConfig(extension) : void 0;
+  if (isReserved2(data, cfg)) {
     result.reserved = true;
     return result;
   }
-  const unregisteredRe = new RegExp(UNREGISTERED_KEYWORDS.join("|"), "i");
-  if (unregisteredRe.test(data)) {
+  if (isUnregistered(data, cfg)) {
     return result;
   }
   result.registered = true;
-  result.domain = matchFirst(data, buildRe(DOMAIN_KEYWORDS)).toLowerCase().split(" ")[0] || "";
-  const registrar = matchFirst(data, buildRe(REGISTRAR_KEYWORDS));
+  result.domain = firstGroup(data, pat("domain", cfg)).toLowerCase().split(" ")[0] || "";
+  result.registryWebsite = firstGroup(data, pat("registryWebsite", cfg));
+  result.registryWHOISServer = firstGroup(data, pat("registryWHOISServer", cfg));
+  const registrar = firstGroup(data, pat("registrar", cfg));
   const registrarUrlMatch = registrar.match(/(.+)\(( *https?:\/\/.+)\)/i);
   if (registrarUrlMatch) {
     result.registrar = registrarUrlMatch[1].trim();
@@ -11914,34 +12022,23 @@ function parseWhoisText(data, extension) {
   } else {
     result.registrar = registrar;
   }
-  result.registrarURL = result.registrarURL || formatURL2(matchFirst(data, buildRe(REGISTRAR_URL_KEYWORDS)));
-  const ianaId = matchFirst(data, buildRe(REGISTRAR_IANA_ID_KEYWORDS));
+  result.registrarURL = result.registrarURL || formatURL2(firstGroup(data, pat("registrarURL", cfg)));
+  const ianaId = firstGroup(data, pat("registrarIANAId", cfg));
   if (/^\d+$/.test(ianaId))
     result.registrarIANAId = ianaId;
-  result.registrarWHOISServer = matchFirst(data, buildRe(REGISTRAR_WHOIS_SERVER_KEYWORDS));
-  result.creationDate = matchFirst(data, buildRe(CREATION_DATE_KEYWORDS));
+  result.registrarWHOISServer = firstGroup(data, pat("registrarWHOISServer", cfg));
+  result.creationDate = firstGroup(data, pat("creationDate", cfg));
   result.creationDateISO8601 = parseRegistryDate(result.creationDate, extension);
-  result.expirationDate = matchFirst(data, buildRe(EXPIRATION_DATE_KEYWORDS));
+  result.expirationDate = firstGroup(data, pat("expirationDate", cfg));
   result.expirationDateISO8601 = parseRegistryDate(result.expirationDate, extension);
-  result.updatedDate = matchFirst(data, buildRe(UPDATED_DATE_KEYWORDS));
+  result.updatedDate = extractUpdatedDate(data, cfg);
   result.updatedDateISO8601 = parseRegistryDate(result.updatedDate, extension);
-  const statusValues = matchAll(data, buildRe(STATUS_KEYWORDS));
-  result.status = statusValues.map((text) => {
-    const urlMatch = text.match(/^(.+)\s+(?:(https?:\/\/\S+)|\((https?:\/\/[^\s)]+)\))/i);
-    if (urlMatch)
-      return { text: urlMatch[1].trim(), url: urlMatch[2] || urlMatch[3] };
-    return { text, url: "" };
-  });
+  result.availableDate = extractAvailableDate(data, cfg);
+  result.availableDateISO8601 = parseRegistryDate(result.availableDate, extension);
+  result.status = extractStatus(data, cfg);
   formatStatus2(result.status);
-  result.nameServers = matchAll(data, buildRe(NAME_SERVER_KEYWORDS)).map((ns) => ns.split(/[\t ]+/)[0].toLowerCase());
-  const dnssecVal = matchFirst(data, buildRe(DNSSEC_KEYWORDS));
-  if (dnssecVal) {
-    result.dnssecSigned = DNSSEC_SIGNED_VALUES.includes(dnssecVal.toLowerCase());
-  } else {
-    const dnssecExtra = matchFirst(data, buildRe(DNSSEC_EXTRA_KEYWORDS));
-    if (dnssecExtra)
-      result.dnssecSigned = !!dnssecExtra.trim();
-  }
+  result.nameServers = extractNameServers(data, cfg);
+  result.dnssecSigned = extractDnssec(data, cfg);
   result.createdAgo = dateDiffText2(result.creationDateISO8601, "now");
   result.createdAgoSeconds = dateDiffSeconds2(result.creationDateISO8601, "now");
   result.expiresIn = dateDiffText2("now", result.expirationDateISO8601);
@@ -12129,7 +12226,7 @@ var tld_web_default = [
   "pf",
   "ph",
   "pl",
-  "pl.co",
+  "co.pl",
   "pt",
   "qa",
   "ro",
@@ -12150,7 +12247,7 @@ var tld_web_default = [
   "tz",
   "ua",
   "uk",
-  "uk.ac",
+  "ac.uk",
   "uz",
   "ve",
   "ao",

@@ -290,20 +290,18 @@ export function parseRegistryDate(raw: string, extension?: string): string | nul
 
   if (config?.dateFormat) {
     const wall = parseWithFormat(input, config.dateFormat);
-    if (wall) {
-      const iso = wallToIso(wall, timezone, hasTime);
-      if (iso) return iso;
-    }
+    if (wall) return wallToIso(wall, timezone, hasTime);
+    // With a configured dateFormat PHP only tries createFromFormat - there is
+    // no fallthrough to loose parsing, so a non-matching stamp is simply null.
+    return null;
   }
 
-  // Reading the parts out explicitly and recombining them keeps the result
-  // independent of the runtime's own timezone: `new Date("2027-06-05 12:00:00")`
-  // means 12:00 local time, so it silently shifts on any host that is not UTC.
+  // No dateFormat: the reference uses the loose `new DateTime`, which here is
+  // replaced by an explicit, timezone-independent wall-clock parse.
   const wall = parseLooseWall(input);
-  if (wall) {
-    const iso = wallToIso(wall, hasTime ? timezone : "UTC", hasTime);
-    if (iso) return iso;
-  }
+  if (wall) return wallToIso(wall, hasTime ? timezone : "UTC", hasTime);
 
-  return legacyToIso(input);
+  // Nothing we recognise. PHP's loose `new DateTime` returns false (-> null)
+  // for these, so do the same rather than guessing with the host timezone.
+  return null;
 }
