@@ -442,8 +442,31 @@ function getJS(): string {
     return '<div class="card-item"><div class="card-item-label">'+label+'</div><div class="card-item-value">'+value+"</div></div>";
   }
 
+  // Dates are rendered the way the original PHP project renders them: shifted
+  // to UTC+8 and printed as "YYYY-MM-DD HH:MM:SS UTC+8" (e.g. an ISO value of
+  // 2027-06-05T06:22:40Z becomes "2027-06-05 14:22:40 UTC+8"). Values that
+  // carry no time component keep their plain "YYYY-MM-DD" form, and anything
+  // that is not a parseable ISO-8601 string is printed verbatim.
+  var DISPLAY_UTC_OFFSET_HOURS=8;
+  var DISPLAY_UTC_LABEL="UTC+8";
+
+  function padNum(n,len){
+    var str=String(n);
+    while(str.length<len)str="0"+str;
+    return str;
+  }
+
+  function formatDisplayDate(iso){
+    var d=new Date(iso);
+    if(isNaN(d.getTime()))return iso;
+    var shifted=new Date(d.getTime()+DISPLAY_UTC_OFFSET_HOURS*3600000);
+    var ymd=padNum(shifted.getUTCFullYear(),4)+"-"+padNum(shifted.getUTCMonth()+1,2)+"-"+padNum(shifted.getUTCDate(),2);
+    if(!/[T ]\d{2}:\d{2}/.test(iso))return ymd;
+    return ymd+" "+padNum(shifted.getUTCHours(),2)+":"+padNum(shifted.getUTCMinutes(),2)+":"+padNum(shifted.getUTCSeconds(),2)+" "+DISPLAY_UTC_LABEL;
+  }
+
   function dateItem(label,date,iso8601,diff,suffix){
-    var val=iso8601?'<span>'+esc(date)+"</span>":"<span>"+esc(date)+"</span>";
+    var val='<span>'+esc(iso8601?formatDisplayDate(iso8601):date)+"</span>";
     var tertiary=diff?'<div class="card-item-value-tertiary"><span>'+esc(diff)+" "+suffix+"</span></div>":"";
     return '<div class="card-item"><div class="card-item-label">'+label+'</div><div class="card-item-value">'+val+"</div>"+tertiary+"</div>";
   }

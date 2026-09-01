@@ -25,6 +25,11 @@ const MONTHS: Record<string, string> = {
   Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
 };
 
+// The registry prints local Guatemala time. Mirrors PHP's
+// `ParserGT::$timezone = "America/Guatemala"` (UTC-6, no DST), which
+// Parser.php applies to the stamp before converting it to UTC.
+const GT_UTC_OFFSET_HOURS = -6;
+
 // Parse the registry's "YYYY-Mon-DD HH:MM:SS" (or date-only) stamp into ISO-8601.
 function gtDateToISO(s: string): string | null {
   const m = s.trim().match(/^(\d{4})-([A-Za-z]{3})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
@@ -34,9 +39,11 @@ function gtDateToISO(s: string): string | null {
   const date = `${y}-${mo}-${d}`;
   if (hh && mm) {
     const time = ss ? `${hh.padStart(2, "0")}:${mm}:${ss}` : `${hh.padStart(2, "0")}:${mm}:00`;
-    const dt = new Date(`${date}T${time}Z`);
-    if (isNaN(dt.getTime())) return toISO8601(s);
-    return `${date}T${time}Z`;
+    // Read as if UTC first, then shift into real UTC: utc = local - offset.
+    const local = new Date(`${date}T${time}Z`);
+    if (isNaN(local.getTime())) return toISO8601(s);
+    const utc = new Date(local.getTime() - GT_UTC_OFFSET_HOURS * 3600000);
+    return utc.toISOString().replace(/\.\d{3}Z$/, "Z");
   }
   return date;
 }
