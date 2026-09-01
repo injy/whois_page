@@ -60,6 +60,15 @@ async function main() {
   await writeFile(join(outDir, "index.html"), html, "utf8");
   console.log(`dist/index.html        ${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB`);
 
+  // EdgeOne Pages serves static files from the project root for "pure"
+  // projects (the whole repo is staged to .edgeone/assets), so also emit
+  // index.html at the repo root so that "/" resolves. Harmless if the
+  // platform instead uses `dist/` as the static root.
+  if (resolve(outDir) !== root) {
+    await writeFile(join(root, "index.html"), html, "utf8");
+    console.log(`index.html (root)      ${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB`);
+  }
+
   // Server-side artifacts at the repo root (regenerated every build)
   await rm(join(root, "cloud-functions"), { recursive: true, force: true });
   await rm(join(root, "middleware.js"), { force: true });
