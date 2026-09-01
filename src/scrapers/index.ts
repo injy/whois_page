@@ -1,6 +1,5 @@
 import { parseHTML } from "linkedom";
 import { WebScraperResult } from "../scraper";
-import { createEmpty, finalizeWhoisResult } from "../parser";
 import { parseGtHtml } from "./gt";
 
 const FETCH_TIMEOUT_MS = 12000;
@@ -664,6 +663,11 @@ export const gwScraper = async (domain: string): Promise<WebScraperResult | null
 // .hm has no port-43 WHOIS; lookup is only available via the registry web form,
 // which requires a session cookie (PHPSESSID) obtained from the homepage first
 // and a Referer header on the POST (the site sits behind Cloudflare).
+//
+// The raw <pre> block is returned as plain text and parsed by the shared
+// parseWhoisText("hm") logic — mirroring the original PHP project's getHM(),
+// which only extracts the <pre> text (decoding Cloudflare-protected emails) and
+// leaves field extraction to the common Parser.
 export const hmScraper = async (domain: string): Promise<WebScraperResult | null> => {
   const ua =
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36";
@@ -715,7 +719,8 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
     }
     const html = await response.text();
 
-    // 3) Extract the <pre> block.
+    // 3) Extract the <pre> block and normalise it to the "Key: Value" text the
+    //    shared parser expects.
     const match = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
     console.log(`[whois:hm] pre=${!!match} htmlLen=${html.length} domain=${domain}`);
     if (!match) {
@@ -724,38 +729,8 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
         error: `registry.hm returned no <pre> block (htmlLen=${html.length})`,
       };
     }
-    const text = match[1];
 
-    // 4) Parse the .hm WHOIS text into a structured result. The .hm output uses
-    //    non-standard labels ("Domain name:", "Domain creation date:", ...) so we
-    //    extract them directly rather than relying on the generic text parser.
-    const field = (label: string): string => {
-      const m = text.match(new RegExp(`\\b${label}:\\s*([^\\r\\n]+)`, "i"));
-      return m ? m[1].trim() : "";
-    };
-    const parseHmDate = (s: string): string | null => {
-      const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (!m) return null;
-      const dt = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-      if (isNaN(dt.getTime())) return null;
-      return dt.toISOString().split("T")[0];
-    };
-
-    const result = createEmpty();
-    result.registered = true;
-    result.domain = (field("Domain name") || domain).toLowerCase();
-    result.registrar = field("Registrar");
-    result.nameServers = [
-      ...text.matchAll(/Name Server:\s*([^\r\n]+)/gi),
-    ].map((m) => m[1].trim().toLowerCase());
-    result.creationDate = field("Domain creation date");
-    result.creationDateISO8601 = parseHmDate(result.creationDate);
-    result.expirationDate = field("Domain expiration date");
-    result.expirationDateISO8601 = parseHmDate(result.expirationDate);
-    result.registryWHOISServer = "whois.registry.hm";
-    result.registryWebsite = "https://www.registry.hm/";
-
-    return { rawText: text, data: finalizeWhoisResult(result) };
+    return { rawText: cleanHmPre(match[1]) };
   } catch (e) {
     console.error(`[whois:hm] error domain=${domain}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
     return {
@@ -764,6 +739,30 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
     };
   }
 };
+
+/**
+ * Normalise the registry.hm <pre> payload to plain "Key: Value" text: decode
+ * Cloudflare-protected emails and turn <br> into newlines (the .hm WHOIS is
+ * preformatted, fields separated by <br>), then strip any remaining markup.
+ * Mirrors the original PHP getHM() text extraction.
+ */
+function cleanHmPre(html: string): string {
+  const decoded = html.replace(
+    /<a\b[^>]*\bdata-cfemail="([0-9a-f]+)"[^>]*>.*?<\/a>/gi,
+    (_m: string, hex: string) => decodeCFEmail(hex),
+  );
+  return decoded.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "");
+}
+
+/** Reverse Cloudflare's data-cfemail obfuscation (XOR with the first byte). */
+function decodeCFEmail(hex: string): string {
+  const key = parseInt(hex.substring(0, 2), 16);
+  let out = "";
+  for (let i = 2; i < hex.length; i += 2) {
+    out += String.fromCharCode(parseInt(hex.substring(i, i + 2), 16) ^ key);
+  }
+  return out;
+}
 
 // HU - Hungary (from original project getHU())
 export const huScraper = async (domain: string): Promise<WebScraperResult | null> => {

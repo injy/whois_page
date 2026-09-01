@@ -23415,32 +23415,7 @@ var hmScraper = async (domain) => {
         error: `registry.hm returned no <pre> block (htmlLen=${html.length})`
       };
     }
-    const text = match[1];
-    const field = (label) => {
-      const m = text.match(new RegExp(`\\b${label}:\\s*([^\\r\\n]+)`, "i"));
-      return m ? m[1].trim() : "";
-    };
-    const parseHmDate = (s) => {
-      const m = s.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-      if (!m) return null;
-      const dt = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]));
-      if (isNaN(dt.getTime())) return null;
-      return dt.toISOString().split("T")[0];
-    };
-    const result = createEmpty();
-    result.registered = true;
-    result.domain = (field("Domain name") || domain).toLowerCase();
-    result.registrar = field("Registrar");
-    result.nameServers = [
-      ...text.matchAll(/Name Server:\s*([^\r\n]+)/gi)
-    ].map((m) => m[1].trim().toLowerCase());
-    result.creationDate = field("Domain creation date");
-    result.creationDateISO8601 = parseHmDate(result.creationDate);
-    result.expirationDate = field("Domain expiration date");
-    result.expirationDateISO8601 = parseHmDate(result.expirationDate);
-    result.registryWHOISServer = "whois.registry.hm";
-    result.registryWebsite = "https://www.registry.hm/";
-    return { rawText: text, data: finalizeWhoisResult(result) };
+    return { rawText: cleanHmPre(match[1]) };
   } catch (e) {
     console.error(`[whois:hm] error domain=${domain}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
     return {
@@ -23449,6 +23424,21 @@ var hmScraper = async (domain) => {
     };
   }
 };
+function cleanHmPre(html) {
+  const decoded = html.replace(
+    /<a\b[^>]*\bdata-cfemail="([0-9a-f]+)"[^>]*>.*?<\/a>/gi,
+    (_m, hex) => decodeCFEmail(hex)
+  );
+  return decoded.replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, "");
+}
+function decodeCFEmail(hex) {
+  const key2 = parseInt(hex.substring(0, 2), 16);
+  let out = "";
+  for (let i = 2; i < hex.length; i += 2) {
+    out += String.fromCharCode(parseInt(hex.substring(i, i + 2), 16) ^ key2);
+  }
+  return out;
+}
 var huScraper = async (domain) => {
   try {
     const url = `https://info.domain.hu/webwhois/en/domain/${encodeURIComponent(domain)}`;
