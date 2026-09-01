@@ -1,0 +1,7 @@
+name = "whois"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+
+# The app relies only on the standard Workers runtime (fetch, URLSearchParams,
+# AbortController, setTimeout). linkedom is pure JS and bundles fine.
+# No nodejs_compat / assets block needed for the Worker entry.
