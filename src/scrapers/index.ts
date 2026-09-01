@@ -4,6 +4,9 @@ import { parseGtHtml } from "./gt";
 
 const FETCH_TIMEOUT_MS = 12000;
 
+// Shared browser-like User-Agent used by every scraper request.
+const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+
 /**
  * Every registry is a third party site, so all scraper requests are bounded.
  */
@@ -1205,8 +1208,15 @@ function parseLKDate(input: string): string {
   return `${match[3]}-${month}-${match[1].padStart(2, "0")}`;
 }
 
-// Generic web scraper for other TLDs
-export const genericScraper = async (tld: string, domain: string): Promise<WebScraperResult | null> => {
+// Generic web scraper for other TLDs. Honors per-TLD cookie config from
+// tld-web.json: a static `cookie` string, or `captureCookie` to grab the
+// registry's Set-Cookie on a pre-flight request and replay it (same idea as
+// the hand-written gr/hm/jo/np/vn scrapers).
+export const genericScraper = async (
+  tld: string,
+  domain: string,
+  opts?: { cookie?: string; captureCookie?: boolean },
+): Promise<WebScraperResult | null> => {
   // "com.hk" is a public suffix, but its registry lives under "hk".
   const base = tld.split(".").pop() || tld;
   const urls = [
@@ -1217,12 +1227,28 @@ export const genericScraper = async (tld: string, domain: string): Promise<WebSc
 
   for (const url of urls) {
     try {
-      const response = await fetchTimeout(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        },
-      });
+      let cookieHeader: string | undefined = opts?.cookie;
+
+      // Dynamic replay: fire a pre-flight GET to capture the registry cookie,
+      // then send it back on the real request.
+      if (opts?.captureCookie && !cookieHeader) {
+        const pre = await fetchTimeout(url, {
+          headers: {
+            "User-Agent": UA,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          },
+        });
+        const setCookie = pre.headers.get("set-cookie");
+        if (setCookie) cookieHeader = setCookie;
+      }
+
+      const headers: Record<string, string> = {
+        "User-Agent": UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+      };
+      if (cookieHeader) headers["Cookie"] = cookieHeader;
+
+      const response = await fetchTimeout(url, { headers });
       if (response.ok) {
         const html = await response.text();
         return { rawText: htmlToWhoisText(html) };

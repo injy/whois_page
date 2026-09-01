@@ -13,10 +13,28 @@ export interface WebScraperResult {
   data?: WhoisResult;
 }
 
-type ScraperFn = (domain: string, labels: string[]) => Promise<WebScraperResult | null>;
+export interface TldWebConfig {
+  tld: string;
+  /** Static Cookie header value sent on every request (e.g. "app_language=en"). */
+  cookie?: string;
+  /** When true, fire a pre-flight request to grab the registry's Set-Cookie and replay it. */
+  captureCookie?: boolean;
+}
+
+type ScraperFn = (
+  domain: string,
+  labels: string[],
+  opts?: TldWebConfig,
+) => Promise<WebScraperResult | null>;
 
 const scraperMap: Record<string, ScraperFn> = {};
-const webTlds = new Set(WEB_TLDS as string[]);
+
+// tld-web.json entries may be a plain TLD string or an object carrying cookie config.
+const tldEntries: TldWebConfig[] = (WEB_TLDS as Array<string | TldWebConfig>).map((e) =>
+  typeof e === "string" ? { tld: e } : e,
+);
+const webTlds = new Set(tldEntries.map((e) => e.tld));
+const tldConfig = new Map<string, TldWebConfig>(tldEntries.map((e) => [e.tld, e]));
 
 // Register specific scrapers for known TLDs
 const specificScrapers: Record<string, (domain: string) => Promise<WebScraperResult | null>> = {
@@ -67,15 +85,13 @@ const specificScrapers: Record<string, (domain: string) => Promise<WebScraperRes
 // Initialize scraper map
 for (const tld of webTlds) {
   if (specificScrapers[tld]) {
-    scraperMap[tld] = async (domain: string) => {
-      const result = await specificScrapers[tld](domain);
-      return result;
-    };
+    // Specific scrapers manage their own requests (and their own cookies).
+    scraperMap[tld] = (domain: string, _labels: string[], _opts?: TldWebConfig) =>
+      specificScrapers[tld](domain);
   } else {
-    // Use generic scraper for other TLDs
-    scraperMap[tld] = async (domain: string) => {
-      return await scrapers.genericScraper(tld, domain);
-    };
+    // Generic scrapers carry the per-TLD cookie config from tld-web.json.
+    scraperMap[tld] = (domain: string, _labels: string[], opts?: TldWebConfig) =>
+      scrapers.genericScraper(tld, domain, opts);
   }
 }
 
@@ -91,8 +107,9 @@ export async function fetchViaWebScraper(
   if (!scraper) return null;
 
   const labels = domain.split(".");
+  const opts = tldConfig.get(tld);
   try {
-    return await scraper(domain, labels);
+    return await scraper(domain, labels, opts);
   } catch {
     return null;
   }

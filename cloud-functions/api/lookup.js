@@ -12166,100 +12166,100 @@ function isUnknown2(r) {
 
 // src/data/tld-web.json
 var tld_web_default = [
-  "am",
-  "ar",
-  "at",
-  "aw",
-  "ax",
-  "bb",
-  "bd",
-  "be",
-  "bg",
-  "bn",
-  "bo",
-  "br",
-  "bt",
-  "cl",
-  "com.hk",
-  "cr",
-  "cu",
-  "cz",
-  "de",
-  "dz",
-  "ee",
-  "eu",
-  "fi",
-  "fr",
-  "ga",
-  "gf",
-  "gg",
-  "gr",
-  "gt",
-  "gw",
-  "hk",
-  "hm",
-  "hu",
-  "il",
-  "im",
-  "it",
-  "je",
-  "jo",
-  "jp",
-  "kg",
-  "kr",
-  "kz",
-  "ls",
-  "lt",
-  "lu",
-  "lv",
-  "md",
-  "mk",
-  "mo",
-  "mq",
-  "mt",
-  "mw",
-  "mx",
-  "nc",
-  "net.za",
-  "ni",
-  "np",
-  "pf",
-  "ph",
-  "pl",
-  "co.pl",
-  "pt",
-  "qa",
-  "ro",
-  "rs",
-  "ru",
-  "si",
-  "sk",
-  "sm",
-  "st",
-  "sv",
-  "tg",
-  "tj",
-  "tm",
-  "tn",
-  "tr",
-  "tt",
-  "tw",
-  "tz",
-  "ua",
-  "uk",
-  "ac.uk",
-  "uz",
-  "ve",
-  "ao",
-  "az",
-  "ba",
-  "cy",
-  "dj",
-  "gm",
-  "gq",
-  "lk",
-  "nr",
-  "py"
+  { tld: "am", captureCookie: true },
+  { tld: "ar", captureCookie: true },
+  { tld: "at", captureCookie: true },
+  { tld: "aw", captureCookie: true },
+  { tld: "ax", captureCookie: true },
+  { tld: "bb" },
+  { tld: "bd", captureCookie: true },
+  { tld: "be", captureCookie: true },
+  { tld: "bg", captureCookie: true },
+  { tld: "bn", captureCookie: true },
+  { tld: "bo" },
+  { tld: "br" },
+  { tld: "bt" },
+  { tld: "cl", captureCookie: true },
+  { tld: "com.hk", captureCookie: true },
+  { tld: "cr", captureCookie: true },
+  { tld: "cu" },
+  { tld: "cz", captureCookie: true },
+  { tld: "de" },
+  { tld: "dz" },
+  { tld: "ee", captureCookie: true },
+  { tld: "eu", captureCookie: true },
+  { tld: "fi", captureCookie: true },
+  { tld: "fr" },
+  { tld: "ga", captureCookie: true },
+  { tld: "gf" },
+  { tld: "gg", captureCookie: true },
+  { tld: "gr" },
+  { tld: "gt" },
+  { tld: "gw" },
+  { tld: "hk" },
+  { tld: "hm" },
+  { tld: "hu" },
+  { tld: "il", captureCookie: true },
+  { tld: "im", captureCookie: true },
+  { tld: "it" },
+  { tld: "je", captureCookie: true },
+  { tld: "jo" },
+  { tld: "jp" },
+  { tld: "kg", captureCookie: true },
+  { tld: "kr" },
+  { tld: "kz", captureCookie: true },
+  { tld: "ls", captureCookie: true },
+  { tld: "lt", captureCookie: true },
+  { tld: "lu", captureCookie: true },
+  { tld: "lv", captureCookie: true },
+  { tld: "md", captureCookie: true },
+  { tld: "mk", captureCookie: true },
+  { tld: "mo", captureCookie: true },
+  { tld: "mq" },
+  { tld: "mt" },
+  { tld: "mw", captureCookie: true },
+  { tld: "mx", captureCookie: true },
+  { tld: "nc", captureCookie: true },
+  { tld: "net.za", captureCookie: true },
+  { tld: "ni" },
+  { tld: "np" },
+  { tld: "pf", captureCookie: true },
+  { tld: "ph" },
+  { tld: "pl", captureCookie: true },
+  { tld: "co.pl", captureCookie: true },
+  { tld: "pt", captureCookie: true },
+  { tld: "qa", captureCookie: true },
+  { tld: "ro", captureCookie: true },
+  { tld: "rs", captureCookie: true },
+  { tld: "ru" },
+  { tld: "si", captureCookie: true },
+  { tld: "sk", captureCookie: true },
+  { tld: "sm", captureCookie: true },
+  { tld: "st", captureCookie: true },
+  { tld: "sv" },
+  { tld: "tg", captureCookie: true },
+  { tld: "tj" },
+  { tld: "tm", captureCookie: true },
+  { tld: "tn", captureCookie: true },
+  { tld: "tr", captureCookie: true },
+  { tld: "tt" },
+  { tld: "tw" },
+  { tld: "tz", captureCookie: true },
+  { tld: "ua", captureCookie: true },
+  { tld: "uk" },
+  { tld: "ac.uk", captureCookie: true },
+  { tld: "uz", captureCookie: true },
+  { tld: "ve", captureCookie: true },
+  { tld: "ao" },
+  { tld: "az" },
+  { tld: "ba" },
+  { tld: "cy" },
+  { tld: "dj" },
+  { tld: "gm" },
+  { tld: "gq" },
+  { tld: "lk" },
+  { tld: "nr" },
+  { tld: "py" }
 ];
 
 // node_modules/linkedom/esm/shared/symbols.js
@@ -22898,6 +22898,7 @@ function parseGtHtml(html) {
 
 // src/scrapers/index.ts
 var FETCH_TIMEOUT_MS = 12e3;
+var UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 async function fetchTimeout(url, init) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
@@ -23994,7 +23995,7 @@ function parseLKDate(input) {
     return "";
   return `${match[3]}-${month}-${match[1].padStart(2, "0")}`;
 }
-var genericScraper = async (tld, domain) => {
+var genericScraper = async (tld, domain, opts) => {
   const base = tld.split(".").pop() || tld;
   const urls = [
     `https://whois.${base}/${encodeURIComponent(domain)}`,
@@ -24003,12 +24004,25 @@ var genericScraper = async (tld, domain) => {
   ];
   for (const url of urls) {
     try {
-      const response = await fetchTimeout(url, {
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-        }
-      });
+      let cookieHeader = opts?.cookie;
+      if (opts?.captureCookie && !cookieHeader) {
+        const pre = await fetchTimeout(url, {
+          headers: {
+            "User-Agent": UA,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+          }
+        });
+        const setCookie = pre.headers.get("set-cookie");
+        if (setCookie)
+          cookieHeader = setCookie;
+      }
+      const headers = {
+        "User-Agent": UA,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
+      };
+      if (cookieHeader)
+        headers["Cookie"] = cookieHeader;
+      const response = await fetchTimeout(url, { headers });
       if (response.ok) {
         const html = await response.text();
         return { rawText: htmlToWhoisText(html) };
@@ -24022,7 +24036,11 @@ var genericScraper = async (tld, domain) => {
 
 // src/scraper.ts
 var scraperMap = {};
-var webTlds = new Set(tld_web_default);
+var tldEntries = tld_web_default.map(
+  (e) => typeof e === "string" ? { tld: e } : e
+);
+var webTlds = new Set(tldEntries.map((e) => e.tld));
+var tldConfig = new Map(tldEntries.map((e) => [e.tld, e]));
 var specificScrapers = {
   "jp": jpScraper,
   "uk": ukScraper,
@@ -24069,14 +24087,9 @@ var specificScrapers = {
 };
 for (const tld of webTlds) {
   if (specificScrapers[tld]) {
-    scraperMap[tld] = async (domain) => {
-      const result = await specificScrapers[tld](domain);
-      return result;
-    };
+    scraperMap[tld] = (domain, _labels, _opts) => specificScrapers[tld](domain);
   } else {
-    scraperMap[tld] = async (domain) => {
-      return await genericScraper(tld, domain);
-    };
+    scraperMap[tld] = (domain, _labels, opts) => genericScraper(tld, domain, opts);
   }
 }
 async function fetchViaWebScraper(domain, tld) {
@@ -24084,8 +24097,9 @@ async function fetchViaWebScraper(domain, tld) {
   if (!scraper)
     return null;
   const labels = domain.split(".");
+  const opts = tldConfig.get(tld);
   try {
-    return await scraper(domain, labels);
+    return await scraper(domain, labels, opts);
   } catch {
     return null;
   }
