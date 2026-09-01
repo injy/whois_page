@@ -442,11 +442,13 @@ function getJS(): string {
     return '<div class="card-item"><div class="card-item-label">'+label+'</div><div class="card-item-value">'+value+"</div></div>";
   }
 
-  // Dates are rendered the way the original PHP project renders them: shifted
-  // to UTC+8 and printed as "YYYY-MM-DD HH:MM:SS UTC+8" (e.g. an ISO value of
-  // 2027-06-05T06:22:40Z becomes "2027-06-05 14:22:40 UTC+8"). Values that
-  // carry no time component keep their plain "YYYY-MM-DD" form, and anything
-  // that is not a parseable ISO-8601 string is printed verbatim.
+  // Architecture: the backend (parseRegistryDate) normalises every registry
+  // stamp to a UTC ISO-8601 string, honouring each TLD's timezone. The display
+  // layer does one thing only - shift that UTC instant to UTC+8 - so all dates
+  // render consistently in Beijing time. A timed stamp 2027-06-05T06:22:40Z
+  // becomes "2027-06-05 14:22:40 UTC+8"; a date-only "2027-06-05" (read as UTC
+  // midnight) becomes "2027-06-05 08:00:00 UTC+8". Anything that is not a
+  // parseable ISO-8601 string is printed verbatim.
   var DISPLAY_UTC_OFFSET_HOURS=8;
   var DISPLAY_UTC_LABEL="UTC+8";
 
@@ -459,11 +461,6 @@ function getJS(): string {
   function formatDisplayDate(iso){
     var d=new Date(iso);
     if(isNaN(d.getTime()))return iso;
-    if(!/[T ]\d{2}:\d{2}/.test(iso)){
-      // The record carries no time. Render midnight instead of shifting the
-      // day into UTC+8, which would turn a bare 2027-06-05 into 08:00:00.
-      return padNum(d.getUTCFullYear(),4)+"-"+padNum(d.getUTCMonth()+1,2)+"-"+padNum(d.getUTCDate(),2)+" 00:00:00 "+DISPLAY_UTC_LABEL;
-    }
     var shifted=new Date(d.getTime()+DISPLAY_UTC_OFFSET_HOURS*3600000);
     var ymd=padNum(shifted.getUTCFullYear(),4)+"-"+padNum(shifted.getUTCMonth()+1,2)+"-"+padNum(shifted.getUTCDate(),2);
     return ymd+" "+padNum(shifted.getUTCHours(),2)+":"+padNum(shifted.getUTCMinutes(),2)+":"+padNum(shifted.getUTCSeconds(),2)+" "+DISPLAY_UTC_LABEL;
