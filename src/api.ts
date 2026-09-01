@@ -162,6 +162,7 @@ export async function lookup(
 
   // Priority 3: Web scraper
   // tld-web.json entries may be plain strings or objects carrying cookie config.
+  let webError: string | undefined;
   const webTldSet = new Set(
     (WEB_TLDS as Array<string | { tld: string }>).map((e) =>
       typeof e === "string" ? e : e.tld,
@@ -186,6 +187,7 @@ export async function lookup(
             sourceUsed: "web",
           };
         }
+        if (scraperResult.error) webError = scraperResult.error;
         console.log(`[whois] WEB result not good, falling through suffix=${suffix}`);
       }
     } catch (e) {
@@ -211,9 +213,10 @@ export async function lookup(
   }
 
   console.log(`[whois] ALL SOURCES FAILED domain=${registrableDomain} tried=${availableSources.join(",")}`);
+  const webNote = webError ? ` Web error: ${webError}` : "";
   return {
     code: 1,
-    msg: `All lookup sources failed for '${registrableDomain}'. Tried: ${availableSources.join(", ")}.`,
+    msg: `All lookup sources failed for '${registrableDomain}'. Tried: ${availableSources.join(", ")}.${webNote}`,
     data: null,
   };
 }

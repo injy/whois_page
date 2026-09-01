@@ -690,7 +690,9 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
       body: formData.toString(),
     });
     console.log(`[whois:hm] POST ${response.status} type=${response.headers.get("content-type")} domain=${domain}`);
-    if (!response.ok) return null;
+    if (!response.ok) {
+      return { rawText: "", error: `registry.hm POST ${url} -> HTTP ${response.status} ${response.statusText || ""}` };
+    }
     const html = await response.text();
 
     // Extract from <pre> tag
@@ -699,10 +701,10 @@ export const hmScraper = async (domain: string): Promise<WebScraperResult | null
     if (match) {
       return { rawText: match[1] };
     }
-    return { rawText: htmlToWhoisText(html) };
+    return { rawText: htmlToWhoisText(html), error: `registry.hm returned no <pre> block (htmlLen=${html.length})` };
   } catch (e) {
     console.error(`[whois:hm] error domain=${domain}: ${e instanceof Error ? (e.stack || e.message) : String(e)}`);
-    return null;
+    return { rawText: "", error: `hmScraper exception: ${e instanceof Error ? e.message : String(e)}` };
   }
 };
 

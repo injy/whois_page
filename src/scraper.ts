@@ -11,6 +11,12 @@ export interface WebScraperResult {
    * WHOIS. When absent, the caller falls back to parsing `rawText`.
    */
   data?: WhoisResult;
+  /**
+   * Optional diagnostic detail recorded when a scrape fails (e.g. the HTTP
+   * status the registry returned). Surfaced to the caller so failures are
+   * debuggable even when server-side logs are unavailable.
+   */
+  error?: string;
 }
 
 export interface TldWebConfig {

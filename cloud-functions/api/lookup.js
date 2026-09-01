@@ -12115,7 +12115,7 @@ var tld_web_default = [
   { tld: "gt" },
   { tld: "gw" },
   { tld: "hk" },
-  { tld: "hm" },
+  { tld: "hm", captureCookie: true },
   { tld: "hu" },
   { tld: "il", captureCookie: true },
   { tld: "im", captureCookie: true },
@@ -23389,17 +23389,19 @@ var hmScraper = async (domain) => {
       body: formData.toString()
     });
     console.log(`[whois:hm] POST ${response.status} type=${response.headers.get("content-type")} domain=${domain}`);
-    if (!response.ok) return null;
+    if (!response.ok) {
+      return { rawText: "", error: `registry.hm POST ${url} -> HTTP ${response.status} ${response.statusText || ""}` };
+    }
     const html = await response.text();
     const match = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
     console.log(`[whois:hm] pre=${!!match} htmlLen=${html.length} domain=${domain}`);
     if (match) {
       return { rawText: match[1] };
     }
-    return { rawText: htmlToWhoisText(html) };
+    return { rawText: htmlToWhoisText(html), error: `registry.hm returned no <pre> block (htmlLen=${html.length})` };
   } catch (e) {
     console.error(`[whois:hm] error domain=${domain}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
-    return null;
+    return { rawText: "", error: `hmScraper exception: ${e instanceof Error ? e.message : String(e)}` };
   }
 };
 var huScraper = async (domain) => {
@@ -24113,6 +24115,7 @@ async function lookup(rawDomain, options) {
       console.error(`[whois] WHOIS error suffix=${suffix}: ${e instanceof Error ? e.stack || e.message : String(e)}`);
     }
   }
+  let webError;
   const webTldSet = new Set(
     tld_web_default.map(
       (e) => typeof e === "string" ? e : e.tld
@@ -24134,6 +24137,7 @@ async function lookup(rawDomain, options) {
             sourceUsed: "web"
           };
         }
+        if (scraperResult.error) webError = scraperResult.error;
         console.log(`[whois] WEB result not good, falling through suffix=${suffix}`);
       }
     } catch (e) {
@@ -24154,9 +24158,10 @@ async function lookup(rawDomain, options) {
     };
   }
   console.log(`[whois] ALL SOURCES FAILED domain=${registrableDomain} tried=${availableSources.join(",")}`);
+  const webNote = webError ? ` Web error: ${webError}` : "";
   return {
     code: 1,
-    msg: `All lookup sources failed for '${registrableDomain}'. Tried: ${availableSources.join(", ")}.`,
+    msg: `All lookup sources failed for '${registrableDomain}'. Tried: ${availableSources.join(", ")}.${webNote}`,
     data: null
   };
 }
