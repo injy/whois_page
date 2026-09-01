@@ -2,9 +2,9 @@ import { parseHTML } from "linkedom";
 import {
   type WhoisResult,
   createEmpty,
-  toISO8601,
   finalizeWhoisResult,
 } from "../parser";
+import { parseRegistryDate } from "../tld-date";
 
 const NBSP = " ";
 
@@ -20,32 +20,14 @@ function clean(s: string): string {
     .trim();
 }
 
-const MONTHS: Record<string, string> = {
-  Jan: "01", Feb: "02", Mar: "03", Apr: "04", May: "05", Jun: "06",
-  Jul: "07", Aug: "08", Sep: "09", Oct: "10", Nov: "11", Dec: "12",
-};
-
-// The registry prints local Guatemala time. Mirrors PHP's
-// `ParserGT::$timezone = "America/Guatemala"` (UTC-6, no DST), which
-// Parser.php applies to the stamp before converting it to UTC.
-const GT_UTC_OFFSET_HOURS = -6;
-
-// Parse the registry's "YYYY-Mon-DD HH:MM:SS" (or date-only) stamp into ISO-8601.
+// Convert the registry's "YYYY-Mon-DD HH:MM:SS" stamp to ISO-8601.
+//
+// The registry writes local Guatemala time, which is exactly what the shared
+// per-extension rules say (tld-date.ts, generated from PHP's
+// `ParserGT::$timezone`), so the conversion is delegated to them rather than
+// being duplicated here.
 function gtDateToISO(s: string): string | null {
-  const m = s.trim().match(/^(\d{4})-([A-Za-z]{3})-(\d{2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?/);
-  if (!m) return toISO8601(s);
-  const [, y, mon, d, hh, mm, ss] = m;
-  const mo = MONTHS[mon.charAt(0).toUpperCase() + mon.slice(1).toLowerCase()] ?? "01";
-  const date = `${y}-${mo}-${d}`;
-  if (hh && mm) {
-    const time = ss ? `${hh.padStart(2, "0")}:${mm}:${ss}` : `${hh.padStart(2, "0")}:${mm}:00`;
-    // Read as if UTC first, then shift into real UTC: utc = local - offset.
-    const local = new Date(`${date}T${time}Z`);
-    if (isNaN(local.getTime())) return toISO8601(s);
-    const utc = new Date(local.getTime() - GT_UTC_OFFSET_HOURS * 3600000);
-    return utc.toISOString().replace(/\.\d{3}Z$/, "Z");
-  }
-  return date;
+  return parseRegistryDate(s, "gt");
 }
 
 export interface GtParseResult {

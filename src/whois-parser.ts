@@ -1,4 +1,5 @@
 import type { WhoisResult } from "./parser";
+import { parseRegistryDate } from "./tld-date";
 
 const BASE_RE = /^[\t ]*(?:PATTERN)[\.\t ]*:(.+)$/im;
 
@@ -139,7 +140,14 @@ for (const [canonical, { aliases }] of Object.entries(STATUS_MAP)) {
   for (const alias of aliases) aliasToCanonical[alias] = canonical;
 }
 
-export function parseWhoisText(data: string): WhoisResult {
+/**
+ * Parse a WHOIS response (or the "Key: Value" text a web scraper produced).
+ *
+ * `extension` selects the registry's date rules: many registries print local
+ * time and/or a non-ISO format, see tld-date.ts. Callers should pass the
+ * public suffix they queried; omitting it keeps the neutral UTC behaviour.
+ */
+export function parseWhoisText(data: string, extension?: string): WhoisResult {
   const result = createEmpty();
   if (!data) { result.unknown = true; return result; }
 
@@ -167,11 +175,11 @@ export function parseWhoisText(data: string): WhoisResult {
   result.registrarWHOISServer = matchFirst(data, buildRe(REGISTRAR_WHOIS_SERVER_KEYWORDS));
 
   result.creationDate = matchFirst(data, buildRe(CREATION_DATE_KEYWORDS));
-  result.creationDateISO8601 = toISO8601(result.creationDate);
+  result.creationDateISO8601 = parseRegistryDate(result.creationDate, extension);
   result.expirationDate = matchFirst(data, buildRe(EXPIRATION_DATE_KEYWORDS));
-  result.expirationDateISO8601 = toISO8601(result.expirationDate);
+  result.expirationDateISO8601 = parseRegistryDate(result.expirationDate, extension);
   result.updatedDate = matchFirst(data, buildRe(UPDATED_DATE_KEYWORDS));
-  result.updatedDateISO8601 = toISO8601(result.updatedDate);
+  result.updatedDateISO8601 = parseRegistryDate(result.updatedDate, extension);
 
   const statusValues = matchAll(data, buildRe(STATUS_KEYWORDS));
   result.status = statusValues.map((text) => {
@@ -240,17 +248,6 @@ function createEmpty(): WhoisResult {
 function formatURL(url: string): string {
   if (url && !/^https?:\/\//i.test(url)) return `http://${url}`;
   return url || "";
-}
-
-function toISO8601(dateStr: string): string | null {
-  if (!dateStr || dateStr === "Z") return null;
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return null;
-    const hasTime = /\d{2}:\d{2}/.test(dateStr);
-    if (hasTime) return d.toISOString().replace(/\.\d{3}Z$/, "Z");
-    return d.toISOString().split("T")[0];
-  } catch { return null; }
 }
 
 function formatStatus(status: Array<{ text: string; url: string }>): void {

@@ -9922,24 +9922,9 @@ function parseRdap(_extension, code, rawData) {
   setRegistrarInfo(json, empty);
   setDates(json, empty);
   empty.status = getStatus(json);
-  formatStatus(empty.status);
   empty.nameServers = getNameServers(json);
   empty.dnssecSigned = getDNSSECSigned(json);
-  empty.createdAgo = dateDiffText(empty.creationDateISO8601, "now");
-  empty.createdAgoSeconds = dateDiffSeconds(empty.creationDateISO8601, "now");
-  empty.expiresIn = dateDiffText("now", empty.expirationDateISO8601);
-  empty.expiresInSeconds = dateDiffSeconds("now", empty.expirationDateISO8601);
-  empty.updatedAgo = dateDiffText(empty.updatedDateISO8601, "now");
-  empty.updatedAgoSeconds = dateDiffSeconds(empty.updatedDateISO8601, "now");
-  empty.gracePeriod = hasAnyStatusText(empty.status, GRACE_PERIOD_TEXTS);
-  empty.redemptionPeriod = hasAnyStatusText(empty.status, REDEMPTION_PERIOD_TEXTS);
-  empty.pendingDelete = hasAnyStatusText(empty.status, PENDING_DELETE_TEXTS);
-  empty.hold = hasAnyStatusText(empty.status, HOLD_TEXTS);
-  empty.inactive = hasAnyStatusText(empty.status, INACTIVE_TEXTS);
-  empty.unknown = isUnknown(empty);
-  if (empty.unknown)
-    empty.registered = false;
-  return empty;
+  return finalizeWhoisResult(empty);
 }
 function unparsable(result, code) {
   if (code === 404) {
@@ -9948,6 +9933,24 @@ function unparsable(result, code) {
   }
   result.unknown = true;
   result.registered = false;
+  return result;
+}
+function finalizeWhoisResult(result) {
+  formatStatus(result.status);
+  result.createdAgo = dateDiffText(result.creationDateISO8601, "now");
+  result.createdAgoSeconds = dateDiffSeconds(result.creationDateISO8601, "now");
+  result.expiresIn = dateDiffText("now", result.expirationDateISO8601);
+  result.expiresInSeconds = dateDiffSeconds("now", result.expirationDateISO8601);
+  result.updatedAgo = dateDiffText(result.updatedDateISO8601, "now");
+  result.updatedAgoSeconds = dateDiffSeconds(result.updatedDateISO8601, "now");
+  result.gracePeriod = hasAnyStatusText(result.status, GRACE_PERIOD_TEXTS);
+  result.redemptionPeriod = hasAnyStatusText(result.status, REDEMPTION_PERIOD_TEXTS);
+  result.pendingDelete = hasAnyStatusText(result.status, PENDING_DELETE_TEXTS);
+  result.hold = hasAnyStatusText(result.status, HOLD_TEXTS);
+  result.inactive = hasAnyStatusText(result.status, INACTIVE_TEXTS);
+  result.unknown = isUnknown(result);
+  if (result.unknown)
+    result.registered = false;
   return result;
 }
 function createEmpty() {
@@ -11329,6 +11332,353 @@ function shuffleWithWeight(entries2) {
   return scored.map((s) => s.entry);
 }
 
+// src/data/tld-date-config.ts
+var RULES = {
+  "ar": { timezone: "America/Argentina/Buenos_Aires" },
+  "at": { timezone: "Europe/Vienna" },
+  "bb": { timezone: "America/Barbados" },
+  "bd": { dateFormat: "d/m/Y" },
+  "bn": { timezone: "Asia/Brunei" },
+  "bt": { timezone: "Asia/Thimphu" },
+  "cl": { timezone: "America/Santiago" },
+  "cn": { timezone: "Asia/Shanghai" },
+  "\u4E2D\u56FD": { timezone: "Asia/Shanghai" },
+  "\u4E2D\u570B": { timezone: "Asia/Shanghai" },
+  "co.pl": { dateFormat: "Y.m.d H:i:s" },
+  "cr": { timezone: "America/Costa_Rica" },
+  "cz": { timezone: "Europe/Prague" },
+  "fi": { timezone: "Europe/Helsinki" },
+  "gg": { timezone: "Europe/Guernsey", dateFormat: "jS F Y \\a\\t H:i:s.u" },
+  "gt": { timezone: "America/Guatemala" },
+  "gw": { dateFormat: "d/m/Y" },
+  "hm": { dateFormat: "d/m/Y" },
+  "hu": { timezone: "Europe/Budapest" },
+  "im": { timezone: "Europe/Isle_of_Man", dateFormat: "d/m/Y H:i:s" },
+  "it": { timezone: "Europe/Rome" },
+  "je": { timezone: "Europe/Jersey", dateFormat: "jS F Y \\a\\t H:i:s.u" },
+  "kg": { timezone: "Asia/Bishkek" },
+  "kr": { dateFormat: "Y. m. d." },
+  "\uD55C\uAD6D": { dateFormat: "Y. m. d." },
+  "ls": { timezone: "Africa/Maseru" },
+  "mk": { timezone: "Europe/Skopje" },
+  "\u043C\u043A\u0434": { timezone: "Europe/Skopje" },
+  "mo": { timezone: "Asia/Macau" },
+  "\u6FB3\u9580": { timezone: "Asia/Macau" },
+  "mw": { timezone: "Africa/Blantyre" },
+  "np": { timezone: "Asia/Kathmandu" },
+  "pf": { dateFormat: "d/m/Y" },
+  "pl": { timezone: "Europe/Warsaw", dateFormat: "Y.m.d H:i:s" },
+  "pt": { timezone: "Europe/Lisbon", dateFormat: "d/m/Y H:i:s" },
+  "rs": { timezone: "Europe/Belgrade" },
+  "\u0441\u0440\u0431": { timezone: "Europe/Belgrade" },
+  "sm": { dateFormat: "d/m/Y" },
+  "st": { timezone: "Africa/Sao_Tome" },
+  "tw": { timezone: "Asia/Taipei" },
+  "\u53F0\u6E7E": { timezone: "Asia/Taipei" },
+  "\u53F0\u7063": { timezone: "Asia/Taipei" },
+  "tz": { timezone: "Africa/Dar_es_Salaam" },
+  "uz": { timezone: "Asia/Tashkent" },
+  "co.uz": { timezone: "Asia/Tashkent" },
+  "com.uz": { timezone: "Asia/Tashkent" },
+  "net.uz": { timezone: "Asia/Tashkent" },
+  "org.uz": { timezone: "Asia/Tashkent" },
+  "ve": { timezone: "America/Caracas" }
+};
+function getTldDateConfig(extension) {
+  return RULES[extension.toLowerCase()];
+}
+
+// src/tld-date.ts
+var MONTH_NAMES = {
+  jan: 1,
+  january: 1,
+  feb: 2,
+  february: 2,
+  mar: 3,
+  march: 3,
+  apr: 4,
+  april: 4,
+  may: 5,
+  jun: 6,
+  june: 6,
+  jul: 7,
+  july: 7,
+  aug: 8,
+  august: 8,
+  sep: 9,
+  sept: 9,
+  september: 9,
+  oct: 10,
+  october: 10,
+  nov: 11,
+  november: 11,
+  dec: 12,
+  december: 12
+};
+function pad(n, len) {
+  let out = String(n);
+  while (out.length < len)
+    out = "0" + out;
+  return out;
+}
+function escapeRe(ch) {
+  return ch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+function getOffsetMinutes(timeZone, at) {
+  try {
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone,
+      hour12: false,
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit"
+    });
+    const parts = dtf.formatToParts(at);
+    const map = {};
+    for (const part of parts) {
+      if (part.type !== "literal")
+        map[part.type] = Number(part.value);
+    }
+    if (!map.year || !map.month || !map.day)
+      return null;
+    const asUtc = Date.UTC(
+      map.year,
+      map.month - 1,
+      map.day,
+      (map.hour ?? 0) % 24,
+      map.minute ?? 0,
+      map.second ?? 0
+    );
+    return (asUtc - at.getTime()) / 6e4;
+  } catch {
+    return null;
+  }
+}
+function zonedWallToUtcMs(wall, timeZone) {
+  const wallAsUtc = Date.UTC(wall.y, wall.mo - 1, wall.d, wall.h, wall.mi, wall.s);
+  if (isNaN(wallAsUtc))
+    return null;
+  if (timeZone === "UTC")
+    return wallAsUtc;
+  const first = getOffsetMinutes(timeZone, new Date(wallAsUtc));
+  if (first === null)
+    return wallAsUtc;
+  let utc = wallAsUtc - first * 6e4;
+  const second = getOffsetMinutes(timeZone, new Date(utc));
+  if (second !== null && second !== first) {
+    utc = wallAsUtc - second * 6e4;
+  }
+  return utc;
+}
+function wallToIso(wall, timeZone, hasTime) {
+  const utcMs = zonedWallToUtcMs(wall, hasTime ? timeZone : "UTC");
+  if (utcMs === null)
+    return null;
+  const dt = new Date(utcMs);
+  const date = `${pad(dt.getUTCFullYear(), 4)}-${pad(dt.getUTCMonth() + 1, 2)}-${pad(dt.getUTCDate(), 2)}`;
+  if (!hasTime)
+    return date;
+  return `${date}T${pad(dt.getUTCHours(), 2)}:${pad(dt.getUTCMinutes(), 2)}:${pad(dt.getUTCSeconds(), 2)}Z`;
+}
+function parseWithFormat(input, format) {
+  let pattern = "^\\s*";
+  const slots = [];
+  const push2 = (re, slot) => {
+    pattern += re;
+    if (slot)
+      slots.push(slot);
+  };
+  let i = 0;
+  while (i < format.length) {
+    const ch = format[i];
+    if (ch === "\\") {
+      pattern += escapeRe(format[i + 1] ?? "");
+      i += 2;
+      continue;
+    }
+    switch (ch) {
+      case "Y":
+        push2("(\\d{4})", "y");
+        break;
+      case "y":
+        push2("(\\d{2})", "y");
+        break;
+      case "m":
+        push2("(\\d{1,2})", "mo");
+        break;
+      case "n":
+        push2("(\\d{1,2})", "mo");
+        break;
+      case "d":
+        push2("(\\d{1,2})", "d");
+        break;
+      case "j":
+        push2("(\\d{1,2})", "d");
+        break;
+      case "F":
+        push2("([A-Za-z]+)", "monName");
+        break;
+      case "M":
+        push2("([A-Za-z]{3,9})", "monName");
+        break;
+      case "H":
+        push2("(\\d{1,2})", "h");
+        break;
+      case "h":
+        push2("(\\d{1,2})", "h");
+        break;
+      case "g":
+        push2("(\\d{1,2})", "h");
+        break;
+      case "i":
+        push2("(\\d{1,2})", "mi");
+        break;
+      case "s":
+        push2("(\\d{1,2})", "s");
+        break;
+      case "u":
+        push2("(\\d{1,6})");
+        break;
+      case "S":
+        push2("(?:st|nd|rd|th)");
+        break;
+      case "l":
+        push2("(?:[A-Za-z]+)");
+        break;
+      case "D":
+        push2("(?:[A-Za-z]{3})");
+        break;
+      case "a":
+        push2("(?:[AaPp][Mm])");
+        break;
+      case "A":
+        push2("(?:[AaPp][Mm])");
+        break;
+      case "t":
+        push2("\\d{1,2}");
+        break;
+      default:
+        push2(escapeRe(ch));
+        break;
+    }
+    i++;
+  }
+  let match;
+  try {
+    match = new RegExp(pattern, "i").exec(input);
+  } catch {
+    return null;
+  }
+  if (!match)
+    return null;
+  const wall = { y: 0, mo: 1, d: 1, h: 0, mi: 0, s: 0 };
+  let group = 1;
+  for (const slot of slots) {
+    const raw = match[group++];
+    if (raw === void 0)
+      return null;
+    if (slot === "monName") {
+      const month = MONTH_NAMES[raw.toLowerCase()];
+      if (!month)
+        return null;
+      wall.mo = month;
+    } else {
+      const value = Number(raw);
+      if (!Number.isFinite(value))
+        return null;
+      wall[slot] = value;
+    }
+  }
+  if (!wall.y || !wall.mo || !wall.d)
+    return null;
+  return wall;
+}
+var LOOSE_PATTERNS = [
+  // 2027-06-05 / 2027-06-05 00:22:40 / 2027-06-05T00:22:40
+  {
+    re: /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+    order: ["y", "mo", "d", "h", "mi", "s"]
+  },
+  // 2027-Jun-05 00:22:40 (the .gt registry style)
+  {
+    re: /^(\d{4})-([A-Za-z]{3,9})-(\d{1,2})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+    order: ["y", "mo", "d", "h", "mi", "s"]
+  },
+  // 05.06.2027 00:22:40 (dotted form is day-first everywhere)
+  {
+    re: /^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:[T ](\d{1,2}):(\d{2})(?::(\d{2}))?)?/,
+    order: ["d", "mo", "y", "h", "mi", "s"]
+  }
+];
+function parseLooseWall(input) {
+  for (const { re, order } of LOOSE_PATTERNS) {
+    const m = re.exec(input);
+    if (!m)
+      continue;
+    const wall = { y: 0, mo: 1, d: 1, h: 0, mi: 0, s: 0 };
+    let ok = true;
+    for (let i = 0; i < order.length; i++) {
+      const raw = m[i + 1];
+      if (raw === void 0)
+        continue;
+      const value = order[i] === "mo" && /[A-Za-z]/.test(raw) ? MONTH_NAMES[raw.toLowerCase()] : Number(raw);
+      if (!Number.isFinite(value) || !value) {
+        if (order[i] === "h" || order[i] === "mi" || order[i] === "s")
+          continue;
+        ok = false;
+        break;
+      }
+      wall[order[i]] = value;
+    }
+    if (ok && wall.y && wall.mo && wall.d)
+      return wall;
+  }
+  return null;
+}
+function hasExplicitZone(input) {
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(input) || /\b(?:UTC|GMT)\b/i.test(input);
+}
+function legacyToIso(dateStr) {
+  try {
+    const d = new Date(dateStr);
+    if (isNaN(d.getTime()))
+      return null;
+    if (/\d{2}:\d{2}/.test(dateStr))
+      return d.toISOString().replace(/\.\d{3}Z$/, "Z");
+    return d.toISOString().split("T")[0];
+  } catch {
+    return null;
+  }
+}
+function parseRegistryDate(raw, extension) {
+  const input = (raw ?? "").trim();
+  if (!input || input === "Z")
+    return null;
+  const hasTime = /\d{2}:\d{2}/.test(input);
+  const config = extension ? getTldDateConfig(extension) : void 0;
+  const timezone = config?.timezone ?? "UTC";
+  if (hasTime && hasExplicitZone(input))
+    return legacyToIso(input);
+  if (config?.dateFormat) {
+    const wall2 = parseWithFormat(input, config.dateFormat);
+    if (wall2) {
+      const iso = wallToIso(wall2, timezone, hasTime);
+      if (iso)
+        return iso;
+    }
+  }
+  const wall = parseLooseWall(input);
+  if (wall) {
+    const iso = wallToIso(wall, hasTime ? timezone : "UTC", hasTime);
+    if (iso)
+      return iso;
+  }
+  return legacyToIso(input);
+}
+
 // src/whois-parser.ts
 function buildRe(patterns) {
   return new RegExp(`^[\\t ]*(?:${patterns.join("|")})[\\.\\t ]*:(.+)$`, "im");
@@ -11539,7 +11889,7 @@ for (const [canonical, { aliases: aliases2 }] of Object.entries(STATUS_MAP2)) {
   for (const alias of aliases2)
     aliasToCanonical2[alias] = canonical;
 }
-function parseWhoisText(data) {
+function parseWhoisText(data, extension) {
   const result = createEmpty2();
   if (!data) {
     result.unknown = true;
@@ -11570,11 +11920,11 @@ function parseWhoisText(data) {
     result.registrarIANAId = ianaId;
   result.registrarWHOISServer = matchFirst(data, buildRe(REGISTRAR_WHOIS_SERVER_KEYWORDS));
   result.creationDate = matchFirst(data, buildRe(CREATION_DATE_KEYWORDS));
-  result.creationDateISO8601 = toISO86012(result.creationDate);
+  result.creationDateISO8601 = parseRegistryDate(result.creationDate, extension);
   result.expirationDate = matchFirst(data, buildRe(EXPIRATION_DATE_KEYWORDS));
-  result.expirationDateISO8601 = toISO86012(result.expirationDate);
+  result.expirationDateISO8601 = parseRegistryDate(result.expirationDate, extension);
   result.updatedDate = matchFirst(data, buildRe(UPDATED_DATE_KEYWORDS));
-  result.updatedDateISO8601 = toISO86012(result.updatedDate);
+  result.updatedDateISO8601 = parseRegistryDate(result.updatedDate, extension);
   const statusValues = matchAll(data, buildRe(STATUS_KEYWORDS));
   result.status = statusValues.map((text) => {
     const urlMatch = text.match(/^(.+)\s+(?:(https?:\/\/\S+)|\((https?:\/\/[^\s)]+)\))/i);
@@ -11658,21 +12008,6 @@ function formatURL2(url) {
     return `http://${url}`;
   return url || "";
 }
-function toISO86012(dateStr) {
-  if (!dateStr || dateStr === "Z")
-    return null;
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime()))
-      return null;
-    const hasTime = /\d{2}:\d{2}/.test(dateStr);
-    if (hasTime)
-      return d.toISOString().replace(/\.\d{3}Z$/, "Z");
-    return d.toISOString().split("T")[0];
-  } catch {
-    return null;
-  }
-}
 function formatStatus2(status) {
   for (const item of status) {
     const key2 = item.text.replace(/[\s_]/g, "").toLowerCase();
@@ -11748,7 +12083,6 @@ var tld_web_default = [
   "br",
   "bt",
   "cl",
-  "cn",
   "com.hk",
   "cr",
   "cu",
@@ -22369,6 +22703,102 @@ function Document4() {
 }
 setPrototypeOf(Document4, Document2).prototype = Document2.prototype;
 
+// src/scrapers/gt.ts
+var NBSP = "\xA0";
+function clean(s) {
+  return s.replace(new RegExp(NBSP, "g"), " ").replace(/\n/g, "").replace(/ +/g, " ").trim();
+}
+function gtDateToISO(s) {
+  return parseRegistryDate(s, "gt");
+}
+function parseGtHtml(html) {
+  const doc = parseHTML(html).document;
+  const message = doc.querySelector("div.caja.caja-message");
+  if (message) {
+    const msg = clean(message.textContent ?? "").replace(/ {2,}/g, " ");
+    return msg ? { rawText: msg } : null;
+  }
+  const boxes = Array.from(doc.querySelectorAll("div.caja.caja-whois"));
+  if (boxes.length !== 2)
+    return null;
+  const lines = [];
+  const data = createEmpty();
+  data.registered = true;
+  let orgName = "";
+  let captureOrg = false;
+  const nameServers = [];
+  for (const child of Array.from(boxes[0].childNodes)) {
+    if (child.nodeType !== 1)
+      continue;
+    const cls = (child.getAttribute?.("class") ?? "").trim();
+    if (cls === "alert alert-success") {
+      const h3 = child.querySelector("h3");
+      if (h3) {
+        const kids = Array.from(h3.childNodes);
+        const nameNode = kids[0];
+        if (nameNode) {
+          const dn = clean(nameNode.textContent ?? "").replace(/[ .\n]+$/, "");
+          data.domain = dn.toLowerCase();
+          lines.push("Domain Name: " + dn);
+        }
+        const statusNode = kids[1];
+        if (statusNode) {
+          const st = clean(statusNode.textContent ?? "");
+          data.status = [{ text: st, url: "" }];
+          lines.push("Domain Status: " + st);
+        }
+      }
+    } else if (cls === "alert alert-info") {
+      const title = clean(child.textContent ?? "");
+      lines.push("");
+      lines.push(title + ":");
+      if (title === "Entitled Organization")
+        captureOrg = true;
+    } else if (cls === "form-stack") {
+      const strong = child.querySelector("strong");
+      if (strong) {
+        const exp = clean(strong.textContent ?? "");
+        lines.push(exp);
+        const expVal = exp.replace(/^Expiration:?/i, "").trim();
+        data.expirationDate = expVal;
+        data.expirationDateISO8601 = gtDateToISO(expVal);
+      } else {
+        for (const field of Array.from(child.querySelectorAll("div.form-field"))) {
+          lines.push("  " + clean(field.textContent ?? ""));
+          if (captureOrg && !orgName)
+            orgName = clean(field.textContent ?? "");
+        }
+        captureOrg = false;
+      }
+    } else if (cls === "form-field") {
+      for (const li of Array.from(child.querySelectorAll("li"))) {
+        const v = clean(li.textContent ?? "");
+        lines.push("  " + v);
+        if (v)
+          nameServers.push(v);
+      }
+    }
+  }
+  for (const child of Array.from(boxes[1].childNodes)) {
+    if (child.nodeType !== 1)
+      continue;
+    const h4 = child.querySelector("h4");
+    if (h4) {
+      lines.push("");
+      lines.push(clean(h4.textContent ?? "") + ":");
+    }
+    for (const field of Array.from(child.querySelectorAll("div.form-field"))) {
+      lines.push("  " + clean(field.textContent ?? ""));
+    }
+  }
+  if (orgName)
+    data.registrar = orgName;
+  if (nameServers.length)
+    data.nameServers = nameServers;
+  const rawText = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+  return { rawText, data: finalizeWhoisResult(data) };
+}
+
 // src/scrapers/index.ts
 var FETCH_TIMEOUT_MS = 12e3;
 async function fetchTimeout(url, init) {
@@ -22380,7 +22810,7 @@ async function fetchTimeout(url, init) {
     clearTimeout(timer);
   }
 }
-var NBSP = "\xA0";
+var NBSP2 = "\xA0";
 var SKIP_TAGS = /* @__PURE__ */ new Set([
   "script",
   "style",
@@ -22409,11 +22839,11 @@ function parseHtml(html) {
   return parseHTML(html).document;
 }
 function normalizeWs(s) {
-  return s.replace(new RegExp(NBSP, "g"), " ").replace(/\s+/g, " ").trim();
+  return s.replace(new RegExp(NBSP2, "g"), " ").replace(/\s+/g, " ").trim();
 }
 function nodeToText(node, out) {
   if (node.nodeType === 3) {
-    out.push(String(node.textContent ?? "").replace(new RegExp(NBSP, "g"), " "));
+    out.push(String(node.textContent ?? "").replace(new RegExp(NBSP2, "g"), " "));
     return;
   }
   if (node.nodeType !== 1)
@@ -22450,27 +22880,6 @@ function htmlToWhoisText(html) {
     nodeToText(root, parts);
   return parts.join("").split("\n").map((line) => line.replace(/[ \t]+/g, " ").trim()).filter((line) => line.length > 0).join("\n").trim();
 }
-var cnScraper = async (domain) => {
-  try {
-    const url = `https://whois.cnnic.cn/whois?domain=${encodeURIComponent(domain)}&lang=en`;
-    const response = await fetchTimeout(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
-      }
-    });
-    if (!response.ok)
-      return null;
-    const html = await response.text();
-    const match = html.match(/<pre[^>]*>([\s\S]*?)<\/pre>/i);
-    if (match) {
-      return { rawText: match[1] };
-    }
-    return { rawText: htmlToWhoisText(html) };
-  } catch {
-    return null;
-  }
-};
 var jpScraper = async (domain) => {
   try {
     const url = `https://whois.jprs.jp/cgi-bin/whois_gw?lang=e&key=${encodeURIComponent(domain)}`;
@@ -22652,66 +23061,25 @@ var hkScraper = async (domain) => {
 var gtScraper = async (domain) => {
   try {
     const url = `https://www.gt/sitio/whois.php?dn=${encodeURIComponent(domain)}&lang=en`;
-    const response = await fetchTimeout(url, {
+    const init = {
       headers: {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8"
       }
-    });
-    if (!response.ok)
+    };
+    let html = null;
+    for (let attempt = 0; attempt < 3 && html === null; attempt++) {
+      try {
+        const response = await fetchTimeout(url, init);
+        if (response.ok)
+          html = await response.text();
+      } catch {
+      }
+    }
+    if (!html)
       return null;
-    const html = await response.text();
-    const doc = parseHtml(html);
-    const text = (el) => (el?.textContent ?? "").replace(/\s+/g, " ").trim();
-    let whois = "";
-    const messageEl = doc.querySelector("div.caja-message");
-    if (messageEl) {
-      const msg = text(messageEl);
-      return msg ? { rawText: msg } : null;
-    }
-    const h3 = doc.querySelector("div.alert-success h3");
-    if (h3) {
-      const small = h3.querySelector("small");
-      const status = small ? text(small) : "";
-      const domainText = text(h3).replace(status, "").replace(/\s*\.\s*$/, "").trim();
-      whois += `Domain Name: ${domainText}.
-`;
-      if (status)
-        whois += `Domain Status: ${status}
-`;
-    }
-    const strong = Array.from(doc.querySelectorAll("strong")).find(
-      (s) => /Expiration/i.test(s.textContent ?? "")
-    );
-    if (strong) {
-      whois += `Registry Expiry Date: ${text(strong).replace(/Expiration:/i, "")}
-`;
-    }
-    const domainLabel = h3 ? text(h3).split(".")[0] : "";
-    const seen = /* @__PURE__ */ new Set();
-    for (const box of Array.from(doc.querySelectorAll("div.caja-whois"))) {
-      for (const h4 of Array.from(box.querySelectorAll("div.alert-info h4"))) {
-        whois += `
-${text(h4)}:
-`;
-      }
-      for (const field of Array.from(box.querySelectorAll("div.form-field, li"))) {
-        const value = text(field);
-        if (!value)
-          continue;
-        if (/Expiration/i.test(value))
-          continue;
-        if (domainLabel && value.startsWith(`${domainLabel}.`))
-          continue;
-        const line = `  ${value}`;
-        if (seen.has(line))
-          continue;
-        seen.add(line);
-        whois += `${line}
-`;
-      }
-    }
-    return whois.trim() ? { rawText: whois.trim() } : null;
+    const parsed = parseGtHtml(html);
+    return parsed ? { rawText: parsed.rawText, data: parsed.data } : null;
   } catch {
     return null;
   }
@@ -23559,7 +23927,6 @@ var genericScraper = async (tld, domain) => {
 var scraperMap = {};
 var webTlds = new Set(tld_web_default);
 var specificScrapers = {
-  "cn": cnScraper,
   "jp": jpScraper,
   "uk": ukScraper,
   "de": deScraper,
@@ -23735,7 +24102,7 @@ async function lookup(rawDomain, options) {
     try {
       const whoisResponse = await fetchWhoisViaProxy(proxyPoolUrl, registrableDomain, suffix);
       if (whoisResponse) {
-        const result = parseWhoisText(whoisResponse.rawText);
+        const result = parseWhoisText(whoisResponse.rawText, suffix);
         if (hasGoodResult(result)) {
           return {
             code: 0,
@@ -23754,7 +24121,7 @@ async function lookup(rawDomain, options) {
     try {
       const scraperResult = await fetchViaWebScraper(registrableDomain, asciiSuffix);
       if (scraperResult) {
-        const result = parseWhoisText(scraperResult.rawText);
+        const result = scraperResult.data ?? parseWhoisText(scraperResult.rawText, suffix);
         if (hasGoodResult(result)) {
           return {
             code: 0,

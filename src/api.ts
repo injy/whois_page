@@ -135,7 +135,7 @@ export async function lookup(
     try {
       const whoisResponse = await fetchWhoisViaProxy(proxyPoolUrl, registrableDomain, suffix);
       if (whoisResponse) {
-        const result = parseWhoisText(whoisResponse.rawText);
+        const result = parseWhoisText(whoisResponse.rawText, suffix);
         if (hasGoodResult(result)) {
           return {
             code: 0,
@@ -159,7 +159,8 @@ export async function lookup(
       if (scraperResult) {
         // Prefer structured data the scraper extracted; fall back to parsing
         // its raw text the same way a plain WHOIS response would be parsed.
-        const result = scraperResult.data ?? parseWhoisText(scraperResult.rawText);
+        const result =
+          scraperResult.data ?? parseWhoisText(scraperResult.rawText, suffix);
         if (hasGoodResult(result)) {
           return {
             code: 0,
