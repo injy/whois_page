@@ -30,7 +30,7 @@
   { "tld": "gt" },
   { "tld": "gw" },
   { "tld": "hk" },
-  { "tld": "hm" },
+  { "tld": "hm", "captureCookie": true },
   { "tld": "hu" },
   { "tld": "il", "captureCookie": true },
   { "tld": "im", "captureCookie": true },
