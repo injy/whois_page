@@ -24,13 +24,14 @@ function handleNotFound(): Response {
  *
  * Supported patterns:
  *   /                          → HTML page
- *   /?domain=google.com        → JSON API
- *   /google.com                → JSON API (path param)
+ *   /?domain=google.com        → HTML page (JS deep-links and renders the result)
+ *   /google.com                → HTML page (path form, JS deep-links)
  *   /api/                      → JSON API
  *   /api/?domain=google.com    → JSON API
  *   /api/google.com            → JSON API (path param)
  *
- * Anything else (e.g. /favicon.ico) is a 404 instead of a bogus lookup.
+ * Anything else that looks like a static asset (e.g. /favicon.ico) is a 404
+ * instead of a bogus lookup; any other unknown path still serves the app.
  */
 function resolveRoute(
   pathname: string,
@@ -39,22 +40,12 @@ function resolveRoute(
   // Strip leading/trailing slashes for comparison
   const path = pathname.replace(/^\/+|\/+$/g, "");
 
-  // Exact root with no domain query → HTML page
-  if (!path && !searchParams.has("domain")) {
-    return { mode: "page" };
-  }
-
-  // Root with ?domain= → API
-  if (!path && searchParams.has("domain")) {
-    return { mode: "api", domain: searchParams.get("domain") || "" };
-  }
-
-  // /api or /api/lookup → API
+  // /api or /api/lookup → JSON API (?domain=)
   if (path === "api" || path === "api/lookup") {
     return { mode: "api", domain: searchParams.get("domain") || "" };
   }
 
-  // /api/something → API with path as domain
+  // /api/something → JSON API with the path as the domain
   if (path.startsWith("api/")) {
     const domainFromPath = path.slice(4); // remove "api/"
     if (domainFromPath && !isDomainLike(domainFromPath)) {
@@ -64,18 +55,12 @@ function resolveRoute(
     return { mode: "api", domain };
   }
 
-  // /something → API with path as domain (e.g. /google.com)
-  if (path) {
-    if (isDomainLike(path)) {
-      return { mode: "api", domain: path };
-    }
-    // Static assets are genuinely missing, but any other unknown path (a typo,
-    // or a prefix injected by the hosting platform such as /whois/) should
-    // still serve the app instead of a 404.
-    return hasAssetExtension(path) ? { mode: "notfound" } : { mode: "page" };
+  // Everything else is the HTML page (root, /?domain=, /google.com, ...).
+  // The browser reads the domain from ?domain= or the pathname and renders the
+  // result itself, so both forms show the same UI when opened directly.
+  if (hasAssetExtension(path)) {
+    return { mode: "notfound" };
   }
-
-  // Fallback: HTML page
   return { mode: "page" };
 }
 

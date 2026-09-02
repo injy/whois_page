@@ -12089,7 +12089,6 @@ var tld_web_default = [
   { tld: "ar", captureCookie: true },
   { tld: "at", captureCookie: true },
   { tld: "aw", captureCookie: true },
-  { tld: "ax", captureCookie: true },
   { tld: "bb" },
   { tld: "bd", captureCookie: true },
   { tld: "be", captureCookie: true },
@@ -12099,12 +12098,10 @@ var tld_web_default = [
   { tld: "br" },
   { tld: "bt" },
   { tld: "cl", captureCookie: true },
-  { tld: "com.hk", captureCookie: true },
   { tld: "cr", captureCookie: true },
   { tld: "cu" },
   { tld: "cz", captureCookie: true },
   { tld: "de" },
-  { tld: "dz" },
   { tld: "ee", captureCookie: true },
   { tld: "eu", captureCookie: true },
   { tld: "fi", captureCookie: true },
@@ -22896,6 +22893,17 @@ function htmlToWhoisText(html) {
   if (root) nodeToText(root, parts);
   return parts.join("").split("\n").map((line) => line.replace(/[ \t]+/g, " ").trim()).filter((line) => line.length > 0).join("\n").trim();
 }
+function childElems(parent, tag) {
+  return Array.from(parent.children).filter(
+    (c) => String(c?.tagName || "").toLowerCase() === tag
+  );
+}
+function tableRows(table) {
+  const rows = childElems(table, "tr");
+  if (rows.length) return rows;
+  const tbody = childElems(table, "tbody")[0];
+  return tbody ? childElems(tbody, "tr") : [];
+}
 var jpScraper = async (domain) => {
   try {
     const url = `https://whois.jprs.jp/cgi-bin/whois_gw?lang=e&key=${encodeURIComponent(domain)}`;
@@ -23099,54 +23107,115 @@ var bbScraper = async (domain) => {
     });
     if (!response.ok) return null;
     const html = await response.text();
-    const match = html.match(/<table[^>]*>([\s\S]*?)<\/table>([\s\S]*?)(?=<p|$)/i);
-    if (match && match[2]) {
-      return { rawText: match[2].trim() };
+    const document = parseHtml(html);
+    const table = document.querySelector("table");
+    if (table) {
+      const parts = [];
+      let next = table.nextSibling;
+      while (next) {
+        if ((next.nodeName || "").toLowerCase() === "p") break;
+        const text = (next.textContent || "").trim();
+        if (text) parts.push(text);
+        next = next.nextSibling;
+      }
+      if (parts.length) return { rawText: parts.join("\n\n") };
     }
     return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
   }
 };
+var BO_COOKIE = "app_language=en";
+var BO_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 var boScraper = async (domain) => {
   try {
-    const parts = domain.split(".");
-    const url = "https://nic.bo/whois.php";
+    const dot = domain.indexOf(".");
     const formData = new URLSearchParams({
-      dominio: parts[0],
-      subdominio: "." + parts[1],
+      dominio: dot === -1 ? domain : domain.slice(0, dot),
+      subdominio: dot === -1 ? "" : "." + domain.slice(dot + 1),
       enviar: ""
     });
-    const response = await fetchTimeout(url, {
+    const response = await fetchTimeout("https://nic.bo/whois.php", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        Cookie: BO_COOKIE,
+        "User-Agent": BO_UA
       },
       body: formData.toString()
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: htmlToWhoisText(html) };
+    const error = (parseHtml(html).querySelector("div.texto_error")?.textContent || "").trim();
+    if (error) return { rawText: error };
+    const redirect = html.match(/window\.self\.location\s*=\s*"([^"]+)"/i);
+    if (!redirect || !redirect[1]) return null;
+    const recordResponse = await fetchTimeout("https://nic.bo/" + redirect[1], {
+      headers: { Cookie: BO_COOKIE, "User-Agent": BO_UA }
+    });
+    if (!recordResponse.ok) return null;
+    const recordHtml = (await recordResponse.text()).split(" :&nbsp;&nbsp;").join("");
+    const doc = parseHtml(recordHtml);
+    const lines = [];
+    const heading = doc.querySelector("#whois h4");
+    if (heading) {
+      const text = (heading.textContent || "").trim();
+      if (text) lines.push(text);
+    }
+    for (const tr of Array.from(doc.querySelectorAll("tr"))) {
+      const tds = Array.from(tr.querySelectorAll("td"));
+      if (tds.length === 1) {
+        const text = (tds[0].textContent || "").trim();
+        if (text) lines.push(text.toUpperCase());
+      } else if (tds.length === 2) {
+        const key2 = (tds[0].textContent || "").trim();
+        const value = (tds[1].textContent || "").trim();
+        if (key2) lines.push(`${key2}: ${value}`);
+      }
+    }
+    if (lines.length) return { rawText: lines.join("\n") };
+    return { rawText: htmlToWhoisText(recordHtml) };
   } catch {
     return null;
   }
 };
 var btScraper = async (domain) => {
   try {
-    const parts = domain.split(".");
+    const dot = domain.indexOf(".");
     const params = new URLSearchParams({
-      query: parts[0],
-      ext: "." + parts[1]
+      query: dot === -1 ? domain : domain.slice(0, dot),
+      ext: dot === -1 ? "" : "." + domain.slice(dot + 1)
     });
-    const url = `https://www.nic.bt/search?${params.toString()}`;
-    const response = await fetchTimeout(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    const response = await fetchTimeout(
+      `https://www.nic.bt/search?${params.toString()}`,
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        }
       }
-    });
+    );
     if (!response.ok) return null;
     const html = await response.text();
+    const doc = parseHtml(html);
+    const table = doc.querySelector("table");
+    if (table) {
+      const text = (table.textContent || "").trim();
+      if (text) return { rawText: text };
+    }
+    const lines = [];
+    for (const cardBody of Array.from(doc.querySelectorAll("div.card-body > div.card-body"))) {
+      for (const child of Array.from(cardBody.children)) {
+        const nodeName = (child.nodeName || "").toLowerCase();
+        if (nodeName !== "h5" && nodeName !== "p") continue;
+        const text = (child.textContent || "").trim();
+        if (!text) continue;
+        lines.push(
+          nodeName === "h5" ? text.split(" :").join("") : text.split(" :").join(":")
+        );
+      }
+      lines.push("");
+    }
+    if (lines.length) return { rawText: lines.join("\n").trim() };
     return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
@@ -23154,9 +23223,8 @@ var btScraper = async (domain) => {
 };
 var cuScraper = async (domain) => {
   try {
-    const url = "https://www.nic.cu/dom_search.php";
     const formData = new URLSearchParams({ domsrch: domain });
-    const response = await fetchTimeout(url, {
+    const response = await fetchTimeout("https://www.nic.cu/dom_search.php", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -23164,8 +23232,35 @@ var cuScraper = async (domain) => {
       },
       body: formData.toString()
     });
-    if (!response.ok) return null;
     const html = await response.text();
+    const doc = parseHtml(html);
+    const message = doc.querySelector('td.commontextgray[height="5"]');
+    if (message) {
+      const text = (message.textContent || "").trim();
+      if (text) return { rawText: text };
+    }
+    const lines = [];
+    for (const table of Array.from(doc.querySelectorAll("table#whitetbl"))) {
+      for (const tr of tableRows(table)) {
+        const tds = childElems(tr, "td");
+        if (tds.length !== 3) continue;
+        const middle = tds[1];
+        const childTable = childElems(middle, "table")[0];
+        if (childTable) {
+          const childTds = Array.from(childTable.querySelectorAll("td"));
+          if (childTds.length === 2) {
+            const key2 = (childTds[0].textContent || "").trim();
+            const value = (childTds[1].textContent || "").trim();
+            if (key2) lines.push(`${key2} ${value}`.trim());
+          }
+        } else {
+          const text = (middle.textContent || "").trim();
+          if (text) lines.push(text);
+        }
+      }
+      lines.push("");
+    }
+    if (lines.length) return { rawText: lines.join("\n").trim() };
     return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
@@ -23179,9 +23274,11 @@ var dzScraper = async (domain) => {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
       }
     });
-    if (!response.ok) return null;
     const jsonText = await response.text();
     const json = JSON.parse(jsonText);
+    if (json && typeof json.title === "string") {
+      return { rawText: json.title };
+    }
     let whois = `Domain Name: ${json.domainName || ""}
 `;
     whois += `Registrar: ${json.registrar || ""}
@@ -23233,13 +23330,44 @@ var gfScraper = async (domain) => {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": UA
       },
       body: formData.toString()
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: htmlToWhoisText(html) };
+    const doc = parseHtml(html);
+    const message = (doc.querySelector(".texte1")?.textContent || "").trim();
+    if (message) return { rawText: message };
+    const texte2 = doc.querySelector(".texte2");
+    if (!texte2) return null;
+    const lines = [];
+    const collect = (node) => {
+      for (const child of node.childNodes) {
+        const nt = child.nodeType;
+        if (nt === 3 || nt === 8) {
+          const t = (child.textContent || "").replace(/<br\s*\/?>/gi, " ").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+          if (t) lines.push(t);
+        } else if (nt === 1) {
+          const name = (child.nodeName || "").toLowerCase();
+          if (name === "script" || name === "style") continue;
+          if (name === "br" || name === "hr") {
+            lines.push("");
+            continue;
+          }
+          collect(child);
+        }
+      }
+    };
+    collect(texte2);
+    const startIdx = lines.findIndex((l) => /^domain name:/i.test(l));
+    const kept = startIdx >= 0 ? lines.slice(startIdx) : lines;
+    const rawText = kept.filter((l) => {
+      const t = l.trim();
+      return !/^#/.test(t) && !/whois server/i.test(t);
+    }).join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    if (!rawText) return null;
+    return { rawText };
   } catch {
     return null;
   }
@@ -23248,15 +23376,13 @@ var grScraper = async (domain) => {
   try {
     const getUrl = "https://grweb.ics.forth.gr/public/whois?lang=en";
     const getResponse = await fetchTimeout(getUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-      }
+      headers: { "User-Agent": UA }
     });
     if (!getResponse.ok) return null;
     const getHtml = await getResponse.text();
-    const csrfMatch = getHtml.match(/name="_csrf"[^>]*value="([^"]+)"/i);
-    if (!csrfMatch) return null;
-    const csrf = csrfMatch[1];
+    const getDoc = parseHtml(getHtml);
+    const csrf = getDoc.querySelector('input[name="_csrf"]')?.getAttribute("value") || "";
+    if (!csrf) return null;
     const cookies = getResponse.headers.get("set-cookie") || "";
     const postUrl = "https://grweb.ics.forth.gr/public/whois/query";
     const formData = new URLSearchParams({
@@ -23268,14 +23394,69 @@ var grScraper = async (domain) => {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": UA,
         "Cookie": cookies
       },
       body: formData.toString()
     });
     if (!postResponse.ok) return null;
     const postHtml = await postResponse.text();
-    return { rawText: postHtml };
+    const doc = parseHtml(postHtml);
+    const invalid = doc.querySelector("span.invalid-feedback");
+    if (invalid && (invalid.textContent || "").trim()) {
+      return { rawText: (invalid.textContent || "").trim() };
+    }
+    const lines = [];
+    const alert = doc.querySelector('div[role="alert"]');
+    if (alert) {
+      for (const row of Array.from(alert.querySelectorAll("div.row"))) {
+        const t = (row.textContent || "").trim();
+        if (t) lines.push(t);
+      }
+      lines.push("");
+    }
+    for (const card of Array.from(doc.querySelectorAll("div.card"))) {
+      const heading = card.querySelector("div.card-heading");
+      if (heading) {
+        const t = (heading.textContent || "").trim();
+        if (t) lines.push(t);
+      }
+      for (const row of Array.from(card.querySelectorAll("li > div.row"))) {
+        const children = Array.from(row.children);
+        if (children.length !== 2) continue;
+        const key2 = (children[0].textContent || "").trim().replace(/[\s:]+$/g, "");
+        const valueCell = children[1];
+        const nestedRows = Array.from(valueCell.querySelectorAll("div.row"));
+        if (nestedRows.length) {
+          for (const nr of nestedRows) {
+            const v = (nr.textContent || "").trim();
+            if (v) lines.push(`${key2}: ${v}`);
+          }
+        } else {
+          const v = (valueCell.textContent || "").trim();
+          if (v) lines.push(`${key2}: ${v}`);
+        }
+      }
+      const accordionHeader = card.querySelector("h2.accordion-header");
+      if (accordionHeader) {
+        const t = (accordionHeader.textContent || "").trim();
+        if (t) lines.push(`${t}:`);
+      }
+      const accordionBody = card.querySelector("div.accordion-body");
+      if (accordionBody) {
+        const texts = Array.from(accordionBody.childNodes).filter((n) => n.nodeType === 3).map((n) => (n.textContent || "").trim()).filter(Boolean);
+        if (texts.length) lines.push(texts.join("  "));
+        for (const li of Array.from(accordionBody.querySelectorAll("li.list-group-item"))) {
+          const spans = Array.from(li.querySelectorAll("span:not([class])")).map((s) => (s.textContent || "").trim()).filter(Boolean);
+          if (spans.length) lines.push(spans.join("  "));
+        }
+        lines.push("");
+      }
+      lines.push("");
+    }
+    const rawText = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    if (!rawText) return null;
+    return { rawText };
   } catch {
     return null;
   }

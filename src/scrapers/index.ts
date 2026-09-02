@@ -626,6 +626,11 @@ export const dzScraper = async (domain: string): Promise<WebScraperResult | null
 };
 
 // GF - French Guiana (from original project getGF())
+// The record lives in .texte2. The contact email addresses are embedded
+// inside HTML comments (<!-- ... -->), so comment nodes are collected too —
+// htmlToWhoisText skips them and would drop the emails. The registry prints a
+// French disclaimer block before the real record, so we keep everything from
+// the "Domain name:" line onward (and drop the leading banner / "#" lines).
 export const gfScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const parts = domain.split(".");
@@ -634,64 +639,184 @@ export const gfScraper = async (domain: string): Promise<WebScraperResult | null
       SMq5BXJw: parts[0],
       UQWhRrMF: "." + parts[1],
     });
-    
     const response = await fetchTimeout(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": UA,
       },
       body: formData.toString(),
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: htmlToWhoisText(html) };
+    const doc = parseHtml(html);
+
+    // Mirror getGF(): error messages are reported inside .texte1.
+    const message = (doc.querySelector(".texte1")?.textContent || "").trim();
+    if (message) return { rawText: message };
+
+    const texte2 = doc.querySelector(".texte2");
+    if (!texte2) return null;
+
+    // Walk every node of .texte2, collecting text and comment content so the
+    // email addresses inside comments survive. Built with the DOM (linkedom),
+    // not a tag-stripping regex.
+    const lines: string[] = [];
+    const collect = (node: any): void => {
+      for (const child of node.childNodes) {
+        const nt = child.nodeType;
+        if (nt === 3 || nt === 8) {
+          // Comment nodes may embed pre-rendered markup (e.g. "<br />");
+          // strip it so the collected text is clean plain text.
+          const t = (child.textContent || "")
+            .replace(/<br\s*\/?>/gi, " ")
+            .replace(/<[^>]+>/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+          if (t) lines.push(t);
+        } else if (nt === 1) {
+          const name = (child.nodeName || "").toLowerCase();
+          if (name === "script" || name === "style") continue;
+          if (name === "br" || name === "hr") {
+            lines.push("");
+            continue;
+          }
+          collect(child);
+        }
+      }
+    };
+    collect(texte2);
+
+    // Start at the real "Domain name:" record (the lowercase form that follows
+    // the French disclaimer), dropping the banner and the "#" boilerplate that
+    // precede it. The contact emails live in comments after this line, so they
+    // are preserved.
+    const startIdx = lines.findIndex((l) => /^domain name:/i.test(l));
+    const kept = startIdx >= 0 ? lines.slice(startIdx) : lines;
+    const rawText = kept
+      .filter((l) => {
+        const t = l.trim();
+        return !/^#/.test(t) && !/whois server/i.test(t);
+      })
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (!rawText) return null;
+    return { rawText };
   } catch {
     return null;
   }
 };
 
 // GR - Greece (from original project getGR())
+// .gr needs a CSRF token + session cookie from the search page before the
+// POST that returns the record. Both steps are done with the DOM (linkedom):
+// the token is read from input[name="_csrf"] and the result is parsed from the
+// alert / card structure — never a tag-stripping regex over the raw HTML.
 export const grScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
-    // First get CSRF token
     const getUrl = "https://grweb.ics.forth.gr/public/whois?lang=en";
     const getResponse = await fetchTimeout(getUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-      },
+      headers: { "User-Agent": UA },
     });
     if (!getResponse.ok) return null;
     const getHtml = await getResponse.text();
-    
-    // Extract CSRF token
-    const csrfMatch = getHtml.match(/name="_csrf"[^>]*value="([^"]+)"/i);
-    if (!csrfMatch) return null;
-    const csrf = csrfMatch[1];
-    
-    // Get cookies
+    const getDoc = parseHtml(getHtml);
+
+    const csrf = getDoc.querySelector('input[name="_csrf"]')?.getAttribute("value") || "";
+    if (!csrf) return null;
+
     const cookies = getResponse.headers.get("set-cookie") || "";
-    
-    // Submit query
+
     const postUrl = "https://grweb.ics.forth.gr/public/whois/query";
     const formData = new URLSearchParams({
       _csrf: csrf,
-      domain: domain,
+      domain,
       Submit: "",
     });
-    
     const postResponse = await fetchTimeout(postUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "User-Agent": UA,
         "Cookie": cookies,
       },
       body: formData.toString(),
     });
     if (!postResponse.ok) return null;
     const postHtml = await postResponse.text();
-    return { rawText: postHtml };
+    const doc = parseHtml(postHtml);
+
+    // Invalid domain notice.
+    const invalid = doc.querySelector("span.invalid-feedback");
+    if (invalid && (invalid.textContent || "").trim()) {
+      return { rawText: (invalid.textContent || "").trim() };
+    }
+
+    const lines: string[] = [];
+
+    // Availability / status alert block.
+    const alert = doc.querySelector('div[role="alert"]');
+    if (alert) {
+      for (const row of Array.from(alert.querySelectorAll("div.row"))) {
+        const t = (row.textContent || "").trim();
+        if (t) lines.push(t);
+      }
+      lines.push("");
+    }
+
+    // One card per section (Registrant, Admin, Tech, Nameservers, ...).
+    for (const card of Array.from(doc.querySelectorAll("div.card"))) {
+      const heading = card.querySelector("div.card-heading");
+      if (heading) {
+        const t = (heading.textContent || "").trim();
+        if (t) lines.push(t);
+      }
+
+      for (const row of Array.from(card.querySelectorAll("li > div.row"))) {
+        const children = Array.from(row.children) as any[];
+        if (children.length !== 2) continue;
+        const key = (children[0].textContent || "").trim().replace(/[\s:]+$/g, "");
+        const valueCell = children[1] as any;
+        const nestedRows = Array.from(valueCell.querySelectorAll("div.row")) as any[];
+        if (nestedRows.length) {
+          for (const nr of nestedRows) {
+            const v = (nr.textContent || "").trim();
+            if (v) lines.push(`${key}: ${v}`);
+          }
+        } else {
+          const v = (valueCell.textContent || "").trim();
+          if (v) lines.push(`${key}: ${v}`);
+        }
+      }
+
+      const accordionHeader = card.querySelector("h2.accordion-header");
+      if (accordionHeader) {
+        const t = (accordionHeader.textContent || "").trim();
+        if (t) lines.push(`${t}:`);
+      }
+      const accordionBody = card.querySelector("div.accordion-body");
+      if (accordionBody) {
+        const texts = Array.from(accordionBody.childNodes)
+          .filter((n: any) => n.nodeType === 3)
+          .map((n: any) => (n.textContent || "").trim())
+          .filter(Boolean);
+        if (texts.length) lines.push(texts.join("  "));
+        for (const li of Array.from(accordionBody.querySelectorAll("li.list-group-item"))) {
+          const spans = Array.from(li.querySelectorAll("span:not([class])"))
+            .map((s: any) => (s.textContent || "").trim())
+            .filter(Boolean);
+          if (spans.length) lines.push(spans.join("  "));
+        }
+        lines.push("");
+      }
+
+      lines.push("");
+    }
+
+    const rawText = lines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+    if (!rawText) return null;
+    return { rawText };
   } catch {
     return null;
   }

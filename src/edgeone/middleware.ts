@@ -14,12 +14,11 @@ export interface MiddlewareContext {
 
 export const config = { matcher: "/" };
 
+/**
+ * The static page already handles /?domain=… (and /<domain>) on the client by
+ * deep-linking and rendering the result, so the root request is served as-is.
+ * JSON is only returned under /api/*.
+ */
 export function middleware(context: MiddlewareContext): Promise<Response> | Response {
-  const url = new URL(context.request.url);
-
-  if (url.pathname === "/" && url.searchParams.has("domain")) {
-    return context.rewrite("/api/lookup?" + url.searchParams.toString());
-  }
-
   return context.next();
 }
