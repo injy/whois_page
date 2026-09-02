@@ -275,7 +275,7 @@ function getJS(): string {
   function getInitialDomain(){
     var fromQuery=new URLSearchParams(location.search).get("domain");
     if(fromQuery)return fromQuery;
-    var p=location.pathname.replace(/^\/+|\/+$/g,"");
+    var p=location.pathname.replace(/^\\/+|\\/+$/g,"");
     if(p&&p!=="api"&&p.indexOf("api/")!==0&&p.indexOf(".")>=0&&p.indexOf("/")<0){
       return p;
     }
