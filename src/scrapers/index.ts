@@ -449,8 +449,8 @@ export const boScraper = async (domain: string): Promise<WebScraperResult | null
       const text = (heading.textContent || "").trim();
       if (text) lines.push(text);
     }
-    for (const tr of Array.from(doc.querySelectorAll("tr"))) {
-      const tds = Array.from(tr.querySelectorAll("td"));
+    for (const tr of Array.from(doc.querySelectorAll("tr")) as any[]) {
+      const tds = Array.from(tr.querySelectorAll("td")) as any[];
       if (tds.length === 1) {
         const text = (tds[0].textContent || "").trim();
         if (text) lines.push(text.toUpperCase());
@@ -506,8 +506,8 @@ export const btScraper = async (domain: string): Promise<WebScraperResult | null
     // Registered domains are rendered as nested card bodies: h5 is the section
     // title ("Domain Details :"), p is a "Key : Value" row.
     const lines: string[] = [];
-    for (const cardBody of Array.from(doc.querySelectorAll("div.card-body > div.card-body"))) {
-      for (const child of Array.from(cardBody.children)) {
+    for (const cardBody of Array.from(doc.querySelectorAll("div.card-body > div.card-body")) as any[]) {
+      for (const child of Array.from(cardBody.children) as any[]) {
         const nodeName = (child.nodeName || "").toLowerCase();
         if (nodeName !== "h5" && nodeName !== "p") continue;
         const text = (child.textContent || "").trim();
@@ -758,7 +758,7 @@ export const grScraper = async (domain: string): Promise<WebScraperResult | null
     // Availability / status alert block.
     const alert = doc.querySelector('div[role="alert"]');
     if (alert) {
-      for (const row of Array.from(alert.querySelectorAll("div.row"))) {
+      for (const row of Array.from(alert.querySelectorAll("div.row")) as any[]) {
         const t = (row.textContent || "").trim();
         if (t) lines.push(t);
       }
@@ -766,14 +766,14 @@ export const grScraper = async (domain: string): Promise<WebScraperResult | null
     }
 
     // One card per section (Registrant, Admin, Tech, Nameservers, ...).
-    for (const card of Array.from(doc.querySelectorAll("div.card"))) {
+    for (const card of Array.from(doc.querySelectorAll("div.card")) as any[]) {
       const heading = card.querySelector("div.card-heading");
       if (heading) {
         const t = (heading.textContent || "").trim();
         if (t) lines.push(t);
       }
 
-      for (const row of Array.from(card.querySelectorAll("li > div.row"))) {
+      for (const row of Array.from(card.querySelectorAll("li > div.row")) as any[]) {
         const children = Array.from(row.children) as any[];
         if (children.length !== 2) continue;
         const key = (children[0].textContent || "").trim().replace(/[\s:]+$/g, "");
@@ -802,7 +802,7 @@ export const grScraper = async (domain: string): Promise<WebScraperResult | null
           .map((n: any) => (n.textContent || "").trim())
           .filter(Boolean);
         if (texts.length) lines.push(texts.join("  "));
-        for (const li of Array.from(accordionBody.querySelectorAll("li.list-group-item"))) {
+        for (const li of Array.from(accordionBody.querySelectorAll("li.list-group-item")) as any[]) {
           const spans = Array.from(li.querySelectorAll("span:not([class])"))
             .map((s: any) => (s.textContent || "").trim())
             .filter(Boolean);
@@ -1306,7 +1306,7 @@ export const ttScraper = async (domain: string): Promise<WebScraperResult | null
     // Mirror getTT(): strip &nbsp then read each 2-cell <tr> as "Key: Value".
     const { document } = parseHTML(html.replace(/&nbsp/g, " "));
 
-    const trs = Array.from(document.querySelectorAll("tr"));
+    const trs = Array.from(document.querySelectorAll("tr")) as any[];
     const rows = trs.filter((tr) => tr.querySelectorAll("td").length === 2);
 
     if (rows.length === 0) {
