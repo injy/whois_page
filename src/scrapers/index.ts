@@ -98,6 +98,21 @@ export function htmlToWhoisText(html: string): string {
     .trim();
 }
 
+/** Direct child elements matching a tag name (ignores deeper descendants). */
+function childElems(parent: any, tag: string): any[] {
+  return Array.from(parent.children).filter(
+    (c: any) => String(c?.tagName || "").toLowerCase() === tag,
+  );
+}
+
+/** <tr> rows of a table, tolerating the <tbody> a parser may insert. */
+function tableRows(table: any): any[] {
+  const rows = childElems(table, "tr");
+  if (rows.length) return rows;
+  const tbody = childElems(table, "tbody")[0];
+  return tbody ? childElems(tbody, "tr") : [];
+}
+
 // CN - China NIC
 export const cnScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
@@ -511,12 +526,14 @@ export const btScraper = async (domain: string): Promise<WebScraperResult | null
 };
 
 // CU - Cuba (from original project getCU())
+// dom_search.php replies 302 -> dom_det.php, which renders the record as
+// nested "#whitetbl" tables. The page also embeds scripts containing raw HTML
+// markup, so converting the whole page to text leaks JavaScript.
 export const cuScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
-    const url = "https://www.nic.cu/dom_search.php";
     const formData = new URLSearchParams({ domsrch: domain });
-    
-    const response = await fetchTimeout(url, {
+
+    const response = await fetchTimeout("https://www.nic.cu/dom_search.php", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -524,8 +541,42 @@ export const cuScraper = async (domain: string): Promise<WebScraperResult | null
       },
       body: formData.toString(),
     });
-    if (!response.ok) return null;
     const html = await response.text();
+
+    const doc = parseHtml(html);
+
+    // Unregistered domains (and other notices) put their message here.
+    const message = doc.querySelector('td.commontextgray[height="5"]');
+    if (message) {
+      const text = (message.textContent || "").trim();
+      if (text) return { rawText: text };
+    }
+
+    // Registered records: three-cell rows where the middle cell holds either a
+    // nested key/value table or a plain section heading. The keys already carry
+    // their own colon ("Dominio:"), so rows are joined with a space.
+    const lines: string[] = [];
+    for (const table of Array.from(doc.querySelectorAll("table#whitetbl")) as any[]) {
+      for (const tr of tableRows(table)) {
+        const tds = childElems(tr, "td");
+        if (tds.length !== 3) continue;
+        const middle = tds[1] as any;
+        const childTable = childElems(middle, "table")[0] as any;
+        if (childTable) {
+          const childTds = Array.from(childTable.querySelectorAll("td")) as any[];
+          if (childTds.length === 2) {
+            const key = (childTds[0].textContent || "").trim();
+            const value = (childTds[1].textContent || "").trim();
+            if (key) lines.push(`${key} ${value}`.trim());
+          }
+        } else {
+          const text = (middle.textContent || "").trim();
+          if (text) lines.push(text);
+        }
+      }
+      lines.push("");
+    }
+    if (lines.length) return { rawText: lines.join("\n").trim() };
     return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
@@ -541,10 +592,15 @@ export const dzScraper = async (domain: string): Promise<WebScraperResult | null
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
       },
     });
-    if (!response.ok) return null;
+    // The API answers with a 302 that still carries the JSON body, so the
+    // status code is not a usable signal here: parse whatever body came back.
     const jsonText = await response.text();
     const json = JSON.parse(jsonText);
-    
+
+    if (json && typeof json.title === "string") {
+      return { rawText: json.title };
+    }
+
     let whois = `Domain Name: ${json.domainName || ""}\n`;
     whois += `Registrar: ${json.registrar || ""}\n`;
     whois += `Creation Date: ${json.creationDate || ""}\n`;

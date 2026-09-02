@@ -17,7 +17,6 @@
   { "tld": "cu" },
   { "tld": "cz", "captureCookie": true },
   { "tld": "de" },
-  { "tld": "dz" },
   { "tld": "ee", "captureCookie": true },
   { "tld": "eu", "captureCookie": true },
   { "tld": "fi", "captureCookie": true },
