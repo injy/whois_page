@@ -353,10 +353,22 @@ export const bbScraper = async (domain: string): Promise<WebScraperResult | null
     if (!response.ok) return null;
     const html = await response.text();
     
-    // Extract text after table
-    const match = html.match(/<table[^>]*>([\s\S]*?)<\/table>([\s\S]*?)(?=<p|$)/i);
-    if (match && match[2]) {
-      return { rawText: match[2].trim() };
+    // Mirror the original project's getBB(): walk the sibling nodes that
+    // follow the first <table> and collect their text until a <p> element is
+    // reached. The registry prints the WHOIS record (and, for unregistered
+    // domains, an "ERROR: Can't open file ..." notice) as plain text there.
+    const document = parseHtml(html);
+    const table = document.querySelector("table");
+    if (table) {
+      const parts: string[] = [];
+      let next = table.nextSibling as any;
+      while (next) {
+        if ((next.nodeName || "").toLowerCase() === "p") break;
+        const text = (next.textContent || "").trim();
+        if (text) parts.push(text);
+        next = next.nextSibling as any;
+      }
+      if (parts.length) return { rawText: parts.join("\n\n") };
     }
     return { rawText: htmlToWhoisText(html) };
   } catch {
