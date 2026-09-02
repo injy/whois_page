@@ -21,7 +21,7 @@
  * Usage: node scripts/build-edgeone.mjs   (override output dir with EO_OUT_DIR)
  */
 import { build } from "esbuild";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -67,6 +67,16 @@ async function main() {
   if (resolve(outDir) !== root) {
     await writeFile(join(root, "index.html"), html, "utf8");
     console.log(`index.html (root)      ${(Buffer.byteLength(html) / 1024).toFixed(1)} KiB`);
+  }
+
+  // Copy the favicon so browsers can fetch /favicon.ico. EdgeOne serves static
+  // files from both the build output dir and the project root.
+  const faviconSrc = join(root, "favicon.ico");
+  await copyFile(faviconSrc, join(outDir, "favicon.ico"));
+  console.log(`dist/favicon.ico       copied`);
+  if (resolve(outDir) !== root) {
+    await copyFile(faviconSrc, join(root, "favicon.ico"));
+    console.log(`favicon.ico (root)    copied`);
   }
 
   // Server-side artifacts at the repo root (regenerated every build)
