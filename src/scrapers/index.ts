@@ -377,27 +377,74 @@ export const bbScraper = async (domain: string): Promise<WebScraperResult | null
 };
 
 // BO - Bolivia (from original project getBO())
+// The search endpoint answers with a JS redirect only; the actual record lives
+// on the page it points at, so a query needs two requests. Both must carry the
+// app_language cookie, otherwise the site replies in Spanish.
+const BO_COOKIE = "app_language=en";
+const BO_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
+
 export const boScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
     const parts = domain.split(".");
-    const url = "https://nic.bo/whois.php";
     const formData = new URLSearchParams({
       dominio: parts[0],
       subdominio: "." + parts[1],
       enviar: "",
     });
-    
-    const response = await fetchTimeout(url, {
+
+    const response = await fetchTimeout("https://nic.bo/whois.php", {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        Cookie: BO_COOKIE,
+        "User-Agent": BO_UA,
       },
       body: formData.toString(),
     });
     if (!response.ok) return null;
     const html = await response.text();
-    return { rawText: htmlToWhoisText(html) };
+
+    // A failed lookup is reported inside div.texto_error.
+    const error = (
+      parseHtml(html).querySelector("div.texto_error")?.textContent || ""
+    ).trim();
+    if (error) return { rawText: error };
+
+    // Follow the window.self.location="..." redirect to the record page.
+    const redirect = html.match(/window\.self\.location\s*=\s*"([^"]+)"/i);
+    if (!redirect || !redirect[1]) return null;
+
+    const recordResponse = await fetchTimeout("https://nic.bo/" + redirect[1], {
+      headers: { Cookie: BO_COOKIE, "User-Agent": BO_UA },
+    });
+    if (!recordResponse.ok) return null;
+    const recordHtml = (await recordResponse.text())
+      .split(" :&nbsp;&nbsp;")
+      .join("");
+
+    // Turn the record tables into "Key: Value" text, mirroring getBO():
+    // the section heading, then one line per table row (single cells become
+    // uppercase section titles, two cells become "Key: Value").
+    const doc = parseHtml(recordHtml);
+    const lines: string[] = [];
+    const heading = doc.querySelector("#whois h4");
+    if (heading) {
+      const text = (heading.textContent || "").trim();
+      if (text) lines.push(text);
+    }
+    for (const tr of Array.from(doc.querySelectorAll("tr"))) {
+      const tds = Array.from(tr.querySelectorAll("td"));
+      if (tds.length === 1) {
+        const text = (tds[0].textContent || "").trim();
+        if (text) lines.push(text.toUpperCase());
+      } else if (tds.length === 2) {
+        const key = (tds[0].textContent || "").trim();
+        const value = (tds[1].textContent || "").trim();
+        if (key) lines.push(`${key}: ${value}`);
+      }
+    }
+    if (lines.length) return { rawText: lines.join("\n") };
+    return { rawText: htmlToWhoisText(recordHtml) };
   } catch {
     return null;
   }
