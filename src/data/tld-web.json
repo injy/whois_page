@@ -12,7 +12,6 @@
   { "tld": "br" },
   { "tld": "bt" },
   { "tld": "cl", "captureCookie": true },
-  { "tld": "com.hk", "captureCookie": true },
   { "tld": "cr", "captureCookie": true },
   { "tld": "cu" },
   { "tld": "cz", "captureCookie": true },
