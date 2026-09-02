@@ -385,10 +385,12 @@ const BO_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36";
 
 export const boScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
-    const parts = domain.split(".");
+    // Split once, like the original project's domainParts (explode(".", $domain, 2)),
+    // so third level names (foo.com.bo) keep ".com.bo" as the subdominio.
+    const dot = domain.indexOf(".");
     const formData = new URLSearchParams({
-      dominio: parts[0],
-      subdominio: "." + parts[1],
+      dominio: dot === -1 ? domain : domain.slice(0, dot),
+      subdominio: dot === -1 ? "" : "." + domain.slice(dot + 1),
       enviar: "",
     });
 
@@ -451,22 +453,57 @@ export const boScraper = async (domain: string): Promise<WebScraperResult | null
 };
 
 // BT - Bhutan (from original project getBT())
+// The registry answers either with a result <table> (not-found notices are
+// returned that way) or, for registered domains, with nested card bodies of
+// h5/p rows. Those rows are written as "Key : Value", so the spacing has to be
+// normalised to "Key: Value" for the parser patterns to match.
 export const btScraper = async (domain: string): Promise<WebScraperResult | null> => {
   try {
-    const parts = domain.split(".");
+    // Split once, like the original project's domainParts (explode(".", $domain, 2)):
+    // .bt registrations are usually third level (drukair.com.bt), so ext has to
+    // keep everything after the first dot (".com.bt"), not just the next label.
+    const dot = domain.indexOf(".");
     const params = new URLSearchParams({
-      query: parts[0],
-      ext: "." + parts[1],
+      query: dot === -1 ? domain : domain.slice(0, dot),
+      ext: dot === -1 ? "" : "." + domain.slice(dot + 1),
     });
-    const url = `https://www.nic.bt/search?${params.toString()}`;
-    
-    const response = await fetchTimeout(url, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+
+    const response = await fetchTimeout(
+      `https://www.nic.bt/search?${params.toString()}`,
+      {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
       },
-    });
+    );
     if (!response.ok) return null;
     const html = await response.text();
+
+    const doc = parseHtml(html);
+
+    // Not-found notices (and a few other replies) come back inside a <table>.
+    const table = doc.querySelector("table");
+    if (table) {
+      const text = (table.textContent || "").trim();
+      if (text) return { rawText: text };
+    }
+
+    // Registered domains are rendered as nested card bodies: h5 is the section
+    // title ("Domain Details :"), p is a "Key : Value" row.
+    const lines: string[] = [];
+    for (const cardBody of Array.from(doc.querySelectorAll("div.card-body > div.card-body"))) {
+      for (const child of Array.from(cardBody.children)) {
+        const nodeName = (child.nodeName || "").toLowerCase();
+        if (nodeName !== "h5" && nodeName !== "p") continue;
+        const text = (child.textContent || "").trim();
+        if (!text) continue;
+        lines.push(
+          nodeName === "h5" ? text.split(" :").join("") : text.split(" :").join(":"),
+        );
+      }
+      lines.push("");
+    }
+    if (lines.length) return { rawText: lines.join("\n").trim() };
     return { rawText: htmlToWhoisText(html) };
   } catch {
     return null;
